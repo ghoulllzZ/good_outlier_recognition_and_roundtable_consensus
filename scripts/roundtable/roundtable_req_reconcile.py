@@ -72,6 +72,8 @@ DEFAULT_TAU_GOOD = 0.60
 DEFAULT_TAU_BAD = 0.30
 DEFAULT_LAMBDA_BAD = 1.5
 DEFAULT_BETA_WEIGHT = 1.0
+DEFAULT_WEIGHT_SCORE_PRIOR = 3.0
+DEFAULT_DOC_EVIDENCE_PRIOR = 4.0
 
 
 
@@ -87,6 +89,37 @@ def recalibrate_conf(p: float) -> float:
     if p > 0.6:
         return 0.3
     return 0.1
+
+
+def normalize_weight_map(raters: List[str], weights: Optional[Dict[str, float]] = None) -> Dict[str, float]:
+    if not raters:
+        return {}
+    if not weights:
+        return {r: 1.0 / len(raters) for r in raters}
+
+    vals = []
+    for r in raters:
+        try:
+            vals.append(max(float(weights.get(r, 0.0)), 0.0))
+        except (TypeError, ValueError):
+            vals.append(0.0)
+
+    total = float(sum(vals))
+    if total <= 0.0:
+        return {r: 1.0 / len(raters) for r in raters}
+    return {r: v / total for r, v in zip(raters, vals)}
+
+
+def stable_softmax(scores: np.ndarray) -> np.ndarray:
+    if scores.size == 0:
+        return scores
+    arr = np.asarray(scores, dtype=float)
+    arr = arr - np.nanmax(arr)
+    raw = np.exp(arr)
+    total = float(np.nansum(raw))
+    if total <= 0.0 or not np.isfinite(total):
+        return np.full(arr.shape, 1.0 / len(arr), dtype=float)
+    return raw / total
 
 
 # Hot-cell criteria (agree with your default)
@@ -1030,19 +1063,26 @@ def compute_weights_from_outliers(
     outlier_quality: pd.DataFrame,
     outlier_decisions: pd.DataFrame,
     raters: List[str],
+    prior_weights: Optional[Dict[str, float]] = None,
     lam_bad: float = DEFAULT_LAMBDA_BAD,
     beta: float = DEFAULT_BETA_WEIGHT,
+    score_prior: float = DEFAULT_WEIGHT_SCORE_PRIOR,
+    evidence_prior: float = DEFAULT_DOC_EVIDENCE_PRIOR,
 ) -> Tuple[Dict[str,float], pd.DataFrame]:
     """
-    Stage-4: weights from good/bad outlier contributions on current document.
+    Stage-4: prior-guided fixed weights for the current document.
+      prior_r = cross-document prior if provided, else uniform
       G_r = sum(abs_dev * Q) over good
       B_r = sum(abs_dev * (1-Q)) over bad
-      raw = exp(beta*(G - lam_bad*B))
-      w = raw / sum(raw)
+      s_r = (G_r - lam_bad*B_r) / (score_prior + n_good + n_bad)
+      rho_doc = total_signal / (total_signal + evidence_prior)
+      w_doc = softmax(beta * s_r)
+      w_final = (1-rho_doc) * prior + rho_doc * w_doc
     Returns (weights_dict, model_profile_df).
     """
+    prior = normalize_weight_map(raters, prior_weights)
     if outlier_decisions.empty or outlier_quality.empty:
-        w = {r: 1.0/len(raters) for r in raters}
+        w = prior
         prof = pd.DataFrame({"rater": raters, "G": 0.0, "B": 0.0, "weight_raw": 1.0, "weight": list(w.values()),
                              "n_good": 0, "n_bad": 0, "n_uncertain": 0, "n_outliers": 0})
         return w, prof
@@ -1053,26 +1093,39 @@ def compute_weights_from_outliers(
     q["decision"] = q["decision"].fillna("uncertain")
 
     rows = []
+    total_signal = 0.0
     for r in raters:
         gr = q[(q["rater"]==r) & (q["decision"]=="good")]
         br = q[(q["rater"]==r) & (q["decision"]=="bad")]
         ur = q[(q["rater"]==r) & (q["decision"]=="uncertain")]
         G = float((gr["abs"] * gr["Q"]).sum()) if not gr.empty else 0.0
         B = float((br["abs"] * (1.0 - br["Q"])).sum()) if not br.empty else 0.0
-        raw = math.exp(float(beta) * (G - float(lam_bad)*B))
+        decisive = int(len(gr) + len(br))
+        total_signal += (G + B)
+        score = (G - float(lam_bad) * B) / float(float(score_prior) + decisive) if decisive > 0 else 0.0
         rows.append({
             "rater": r,
             "G": G,
             "B": B,
-            "weight_raw": raw,
             "n_good": int(len(gr)),
             "n_bad": int(len(br)),
             "n_uncertain": int(len(ur)),
             "n_outliers": int(len(gr)+len(br)+len(ur)),
+            "_score": score,
         })
     prof = pd.DataFrame(rows)
-    prof["weight_raw"] = prof["weight_raw"].clip(lower=1e-9)
-    prof["weight"] = prof["weight_raw"] / float(prof["weight_raw"].sum()) if float(prof["weight_raw"].sum())>0 else 1.0/len(raters)
+    doc_scores = float(beta) * prof["_score"].to_numpy(dtype=float)
+    doc_weights = stable_softmax(doc_scores)
+    rho_doc = total_signal / float(total_signal + float(evidence_prior)) if total_signal > 0.0 else 0.0
+    prior_vec = np.array([prior[r] for r in prof["rater"]], dtype=float)
+    final_weights = (1.0 - rho_doc) * prior_vec + rho_doc * doc_weights
+    total = float(final_weights.sum())
+    if total <= 0.0 or not np.isfinite(total):
+        final_weights = prior_vec
+        total = float(final_weights.sum())
+    prof["weight_raw"] = doc_weights
+    prof["weight"] = final_weights / total if total > 0.0 else prior_vec
+    prof = prof.drop(columns=["_score"])
     weights = dict(zip(prof["rater"], prof["weight"]))
     return weights, prof
 
@@ -1472,15 +1525,16 @@ def run_roundtable(
     if not active_raters:
         raise RuntimeError("All raters were skipped during initial scoring for this case.")
 
-    # === Outlier -> quality -> weights (current document) ===
+    # === Outlier -> quality -> prior-guided fixed weights ===
     outlier_events = build_outlier_events(ratings_long, delta=DEFAULT_OUTLIER_DELTA)
     outlier_quality, outlier_decisions = compute_outlier_quality(outlier_events, req_df, issues_long,
                                                                   tau_good=DEFAULT_TAU_GOOD, tau_bad=DEFAULT_TAU_BAD)
     # Q map for influence (rater,item,type)
     q_map = outlier_quality[["rater","item","dim","Q"]].rename(columns={"dim":"type"}) if not outlier_quality.empty else pd.DataFrame(columns=["rater","item","type","Q"])
-    # weights derived from current document outlier analysis (override input weights)
+    # Blend current-document evidence with the incoming prior instead of overriding it.
     weights, model_profile = compute_weights_from_outliers(outlier_quality, outlier_decisions,
                                                           raters=[r.name for r in active_raters],
+                                                          prior_weights=weights,
                                                           lam_bad=DEFAULT_LAMBDA_BAD,
                                                           beta=DEFAULT_BETA_WEIGHT)
 
@@ -1849,7 +1903,7 @@ def main():
     if args.weights_csv:
         weights = load_weights_csv(args.weights_csv)
     elif args.analyze_xlsx:
-        # optional: reuse prior analysis as an *initial* prior; run_roundtable will override using current-document outliers
+        # optional: reuse prior analysis as a fixed prior; run_roundtable will blend it with current-document evidence
         weights = compute_weights_from_analyze_report(
             report_xlsx=args.analyze_xlsx,
             raters=rater_names,
