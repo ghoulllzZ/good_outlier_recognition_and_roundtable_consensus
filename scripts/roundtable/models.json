@@ -1,0 +1,35 @@
+{
+  "raters": [
+    {
+      "name": "deepseek",
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "model": "deepseek-reasoner"
+    },
+    {
+      "name": "qwen",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key_env": "DASHSCOPE_API_KEY",
+      "model": "qwen-plus"
+    },
+    {
+      "name": "openai_gpt",
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "model": "gpt-5.1"
+    },
+    {
+      "name": "kimi",
+      "base_url": "https://api.moonshot.cn/v1",
+      "api_key_env": "MOONSHOT_API_KEY",
+      "model": "kimi-k2-0905-preview"
+    },
+    {
+      "name": "glm5",
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "api_key_env": "ZHIPU_API_KEY",
+      "model": "glm-5"
+    }
+
+  ]
+}

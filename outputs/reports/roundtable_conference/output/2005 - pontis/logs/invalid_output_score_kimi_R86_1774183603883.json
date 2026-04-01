@@ -1,0 +1,53 @@
+{
+  "item": "R86",
+  "scores": {
+    "U": 3,
+    "A": 2,
+    "C": 4,
+    "V": 2
+  },
+  "confidences": {
+    "U": 0.8,
+    "A": 0.9,
+    "C": 0.7
+  },
+  "rationales": {
+    "U": "原文存在拼写错误'incl ude''require d''co nfirmation'，破坏可读性",
+    "A": "选项2与选项3的触发条件均为'save'，但未说明同时满足时的行为，存在冲突歧义",
+    "C": "需求仅描述交互选项，未给出功能正确性准则（如重算结果准确性）， correctness 无法充分判断",
+    "V": "'give option to re calculate''recalculate silently'均未量化响应时间、结果验证方式，无法直接测试"
+  },
+  "suggestions": {
+    "U": "The system shall present exactly three mutually exclusive options when the user initiates Save-Inspection: 1) skip recalculation, 2) prompt user and recalculate only after explicit confirmation, 3) recalculate automatically without prompt.",
+    "A": "Add priority rule: If option 2 and 3 are both configured, option 2 shall take precedence.",
+    "C": "保持不变",
+    "V": "Each option shall complete its workflow within 1 second and produce an audit log entry containing old-value, new-value, timestamp."
+  },
+  "issues": [
+    {
+      "type": "U",
+      "evidence": "incl ude",
+      "rewrite": "include"
+    },
+    {
+      "type": "U",
+      "evidence": "require d",
+      "rewrite": "required"
+    },
+    {
+      "type": "U",
+      "evidence": "co nfirmation",
+      "rewrite": "confirmation"
+    },
+    {
+      "type": "A",
+      "evidence": "give option to re calculate before update /save ... recalculate silently when user saves",
+      "rewrite": "Add exclusive-gateway: only one option shall be executed per save event; if multiple options are enabled, option 2 shall override option 3."
+    },
+    {
+      "type": "V",
+      "evidence": "give option to re calculate",
+      "rewrite": "The prompt shall contain 'Recalculate' and 'Cancel' buttons; system shall recalculate only after the user clicks 'Recalculate' within 5 seconds."
+    }
+  ]
+}
