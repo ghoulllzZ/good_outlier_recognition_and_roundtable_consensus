@@ -26,10 +26,13 @@ import re
 import json
 import ast
 import math
+import random
 import time
 import argparse
 import requests
-from dataclasses import dataclass
+from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from email.utils import parsedate_to_datetime
 from typing import Dict, List, Any, Optional, Tuple
 
 import numpy as np
@@ -76,6 +79,110 @@ DEFAULT_WEIGHT_SCORE_PRIOR = 3.0
 DEFAULT_DOC_EVIDENCE_PRIOR = 4.0
 
 
+@dataclass(frozen=True)
+class TreatmentConfig:
+    key: str
+    label: str
+    use_roundtable: bool
+    use_outlier_pipeline: bool
+    use_quality_scores: bool
+    recompute_weights: bool
+    fixed_candidate_pairs: bool
+    force_equal_weights: bool
+    requires_single_rater: bool = False
+
+
+TREATMENT_CONFIGS: Dict[str, TreatmentConfig] = {
+    "single_llm": TreatmentConfig(
+        key="single_llm",
+        label="Single-LLM",
+        use_roundtable=False,
+        use_outlier_pipeline=False,
+        use_quality_scores=False,
+        recompute_weights=False,
+        fixed_candidate_pairs=False,
+        force_equal_weights=True,
+        requires_single_rater=True,
+    ),
+    "equal_weight_aggregation": TreatmentConfig(
+        key="equal_weight_aggregation",
+        label="Equal-Weight Aggregation",
+        use_roundtable=False,
+        use_outlier_pipeline=False,
+        use_quality_scores=False,
+        recompute_weights=False,
+        fixed_candidate_pairs=False,
+        force_equal_weights=True,
+    ),
+    "roundtable_no_weighting": TreatmentConfig(
+        key="roundtable_no_weighting",
+        label="Roundtable w/o Weighting",
+        use_roundtable=True,
+        use_outlier_pipeline=False,
+        use_quality_scores=False,
+        recompute_weights=False,
+        fixed_candidate_pairs=False,
+        force_equal_weights=True,
+    ),
+    "full_method": TreatmentConfig(
+        key="full_method",
+        label="Full Method",
+        use_roundtable=True,
+        use_outlier_pipeline=True,
+        use_quality_scores=True,
+        recompute_weights=True,
+        fixed_candidate_pairs=True,
+        force_equal_weights=False,
+    ),
+}
+
+TREATMENT_ALIASES = {
+    "single_llm": "single_llm",
+    "single_llm_baseline": "single_llm",
+    "single-llm": "single_llm",
+    "singlellm": "single_llm",
+    "equal_weight_aggregation": "equal_weight_aggregation",
+    "equal-weight-aggregation": "equal_weight_aggregation",
+    "equal_weight": "equal_weight_aggregation",
+    "equal-weight": "equal_weight_aggregation",
+    "roundtable_no_weighting": "roundtable_no_weighting",
+    "roundtable-no-weighting": "roundtable_no_weighting",
+    "roundtable_wo_weighting": "roundtable_no_weighting",
+    "roundtable_w_o_weighting": "roundtable_no_weighting",
+    "roundtable_without_weighting": "roundtable_no_weighting",
+    "full_method": "full_method",
+    "full-method": "full_method",
+    "full": "full_method",
+}
+
+OUTLIER_EVENT_COLUMNS = [
+    "rater", "item", "dim", "dimension", "score", "confidence",
+    "baseline_median", "deviation", "abs_deviation", "delta",
+    "rationale", "suggestion",
+]
+OUTLIER_QUALITY_COLUMNS = [
+    "rater", "item", "dim", "abs_deviation", "E_evidence", "F_falsifiable",
+    "R_rewrite_exec", "S_specificity", "T_taxonomy_fit", "D_novelty", "Q", "hard_fail",
+]
+OUTLIER_DECISION_COLUMNS = ["rater", "item", "dim", "abs_deviation", "Q", "hard_fail", "decision"]
+MODEL_PROFILE_COLUMNS = ["rater", "G", "B", "weight_raw", "weight", "n_good", "n_bad", "n_uncertain", "n_outliers"]
+Q_MAP_COLUMNS = ["rater", "item", "type", "Q"]
+CANDIDATE_PAIR_COLUMNS = ["item", "type"]
+
+
+def canonicalize_treatment_name(value: str) -> str:
+    token = re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
+    mapped = TREATMENT_ALIASES.get(token)
+    if not mapped:
+        valid = ", ".join(sorted(TREATMENT_CONFIGS))
+        raise ValueError(f"Unknown treatment '{value}'. Valid values: {valid}")
+    return mapped
+
+
+def resolve_treatment_config(value: str) -> TreatmentConfig:
+    return TREATMENT_CONFIGS[canonicalize_treatment_name(value)]
+
+
 
 # Confidence recalibration (RECONCILE-style)
 def recalibrate_conf(p: float) -> float:
@@ -108,6 +215,35 @@ def normalize_weight_map(raters: List[str], weights: Optional[Dict[str, float]] 
     if total <= 0.0:
         return {r: 1.0 / len(raters) for r in raters}
     return {r: v / total for r, v in zip(raters, vals)}
+
+
+def empty_df(columns: List[str]) -> pd.DataFrame:
+    return pd.DataFrame(columns=columns)
+
+
+def select_treatment_raters(
+    raters: List["Rater"],
+    treatment: TreatmentConfig,
+    single_rater: str = "",
+) -> List["Rater"]:
+    if not treatment.requires_single_rater:
+        if single_rater:
+            raise ValueError("--single_rater is only valid with --treatment single_llm")
+        return raters
+
+    if single_rater:
+        wanted = single_rater.strip().lower()
+        chosen = [r for r in raters if r.name.strip().lower() == wanted]
+        if not chosen:
+            names = ", ".join(r.name for r in raters)
+            raise ValueError(f"Unknown single rater '{single_rater}'. Available raters: {names}")
+        return chosen
+
+    if len(raters) == 1:
+        return raters
+
+    names = ", ".join(r.name for r in raters)
+    raise ValueError(f"--treatment single_llm requires --single_rater when multiple raters are configured: {names}")
 
 
 def stable_softmax(scores: np.ndarray) -> np.ndarray:
@@ -145,8 +281,18 @@ OUTLIER_METRICS_WEIGHTS = {
 # Network / retry
 TEMPERATURE_SCORE = 0.2
 TEMPERATURE_DISCUSS = 0.2
+DEFAULT_REQUEST_TIMEOUT = 120.0
 MAX_RETRIES = 2
 RETRY_SLEEP = 2.0
+DEFAULT_MIN_REQUEST_INTERVAL = 1.5
+MAX_429_RETRIES = 4
+RETRY_429_BASE_SLEEP = 5.0
+RETRY_429_MAX_SLEEP = 60.0
+RETRY_429_JITTER = 0.5
+MAX_TIMEOUT_RETRIES = 2
+RETRY_TIMEOUT_BASE_SLEEP = 10.0
+RETRY_TIMEOUT_MAX_SLEEP = 90.0
+RETRY_TIMEOUT_JITTER = 1.0
 
 
 # =========================
@@ -158,14 +304,44 @@ class LLMProvider:
 
 
 class OpenAICompatProvider(LLMProvider):
-    def __init__(self, base_url: str, api_key: str, model: str, timeout: int = 120):
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout: float = DEFAULT_REQUEST_TIMEOUT,
+        min_interval_sec: float = DEFAULT_MIN_REQUEST_INTERVAL,
+        max_429_retries: int = MAX_429_RETRIES,
+        retry_429_base_sleep: float = RETRY_429_BASE_SLEEP,
+        retry_429_max_sleep: float = RETRY_429_MAX_SLEEP,
+        max_timeout_retries: int = MAX_TIMEOUT_RETRIES,
+        retry_timeout_base_sleep: float = RETRY_TIMEOUT_BASE_SLEEP,
+        retry_timeout_max_sleep: float = RETRY_TIMEOUT_MAX_SLEEP,
+    ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
-        self.timeout = timeout
+        self.timeout = max(float(timeout), 1.0)
+        self.min_interval_sec = max(float(min_interval_sec), 0.0)
+        self.max_429_retries = max(int(max_429_retries), 0)
+        self.retry_429_base_sleep = max(float(retry_429_base_sleep), 0.0)
+        self.retry_429_max_sleep = max(float(retry_429_max_sleep), self.retry_429_base_sleep)
+        self.max_timeout_retries = max(int(max_timeout_retries), 0)
+        self.retry_timeout_base_sleep = max(float(retry_timeout_base_sleep), 0.0)
+        self.retry_timeout_max_sleep = max(float(retry_timeout_max_sleep), self.retry_timeout_base_sleep)
+        self._next_request_ts = 0.0
+
+    def _throttle(self) -> None:
+        if self.min_interval_sec <= 0:
+            return
+        now = time.monotonic()
+        if self._next_request_ts > now:
+            time.sleep(self._next_request_ts - now)
+        self._next_request_ts = time.monotonic() + self.min_interval_sec
 
     def chat(self, messages: List[Dict[str, str]], temperature: float = 0.2) -> str:
         # url = f"{self.base_url}/chat/completions"
+        self._throttle()
 
         base = self.base_url
         # tolerate base_url with or without "/v1"
@@ -185,7 +361,7 @@ class OpenAICompatProvider(LLMProvider):
 @dataclass
 class Rater:
     name: str
-    provider: LLMProvider
+    provider: Optional[LLMProvider]
 
 
 # =========================
@@ -207,6 +383,132 @@ def read_csv_smart(path: str) -> pd.DataFrame:
         except UnicodeDecodeError:
             continue
     return pd.read_csv(path)
+
+
+def safe_path_component(value: str) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r'[<>:"/\\|?*]+', "_", text)
+    text = re.sub(r"\s+", " ", text).strip().rstrip(".")
+    return text or "NA"
+
+
+def round0_cache_payload_path(cache_dir: str, rater_name: str, item: str) -> str:
+    rater_dir = os.path.join(cache_dir, safe_path_component(rater_name))
+    return os.path.join(rater_dir, f"{safe_path_component(item)}.json")
+
+
+def round0_cache_error_path(cache_dir: str, rater_name: str, item: str) -> str:
+    rater_dir = os.path.join(cache_dir, safe_path_component(rater_name))
+    return os.path.join(rater_dir, f"{safe_path_component(item)}.error.json")
+
+
+def load_round0_cache_entry(cache_dir: str, rater_name: str, item: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+    payload_path = round0_cache_payload_path(cache_dir, rater_name, item)
+    error_path = round0_cache_error_path(cache_dir, rater_name, item)
+
+    if os.path.exists(payload_path):
+        with open(payload_path, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+        payload = cached.get("payload", cached) if isinstance(cached, dict) else cached
+        payload = validate_scoring_payload(payload, rater_name)
+        return "hit", payload
+
+    if os.path.exists(error_path):
+        with open(error_path, "r", encoding="utf-8") as f:
+            cached_err = json.load(f)
+        return "skip", cached_err if isinstance(cached_err, dict) else {"error": str(cached_err)}
+
+    return "miss", None
+
+
+def save_round0_cache_payload(cache_dir: str, rater_name: str, item: str, payload: Dict[str, Any]) -> str:
+    path = round0_cache_payload_path(cache_dir, rater_name, item)
+    ensure_dir(os.path.dirname(path))
+    record = {
+        "schema_version": 1,
+        "rater": rater_name,
+        "item": item,
+        "cached_at": datetime.now(timezone.utc).isoformat(),
+        "payload": payload,
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(record, f, ensure_ascii=False, indent=2)
+    err_path = round0_cache_error_path(cache_dir, rater_name, item)
+    if os.path.exists(err_path):
+        os.remove(err_path)
+    return path
+
+
+def save_round0_cache_error(cache_dir: str, rater_name: str, item: str, error_text: str) -> str:
+    path = round0_cache_error_path(cache_dir, rater_name, item)
+    ensure_dir(os.path.dirname(path))
+    record = {
+        "schema_version": 1,
+        "rater": rater_name,
+        "item": item,
+        "cached_at": datetime.now(timezone.utc).isoformat(),
+        "error": str(error_text),
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(record, f, ensure_ascii=False, indent=2)
+    payload_path = round0_cache_payload_path(cache_dir, rater_name, item)
+    if os.path.exists(payload_path):
+        os.remove(payload_path)
+    return path
+
+
+def get_http_status(exc: Exception) -> Optional[int]:
+    if not isinstance(exc, requests.exceptions.HTTPError):
+        return None
+    return getattr(getattr(exc, "response", None), "status_code", None)
+
+
+def parse_retry_after_seconds(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return max(float(text), 0.0)
+    except (TypeError, ValueError):
+        pass
+    try:
+        retry_dt = parsedate_to_datetime(text)
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return None
+    if retry_dt is None:
+        return None
+    if retry_dt.tzinfo is None:
+        retry_dt = retry_dt.replace(tzinfo=timezone.utc)
+    delta = (retry_dt - datetime.now(timezone.utc)).total_seconds()
+    return max(delta, 0.0)
+
+
+def compute_retry_delay_seconds(
+    exc: Exception,
+    attempt_idx: int,
+    default_sleep: float = RETRY_SLEEP,
+    retry_429_base_sleep: float = RETRY_429_BASE_SLEEP,
+    retry_429_max_sleep: float = RETRY_429_MAX_SLEEP,
+    retry_timeout_base_sleep: float = RETRY_TIMEOUT_BASE_SLEEP,
+    retry_timeout_max_sleep: float = RETRY_TIMEOUT_MAX_SLEEP,
+) -> float:
+    status = get_http_status(exc)
+    if isinstance(exc, requests.exceptions.ReadTimeout):
+        backoff = retry_timeout_base_sleep * (2 ** max(int(attempt_idx), 0))
+        jitter = random.uniform(0.0, RETRY_TIMEOUT_JITTER)
+        return min(retry_timeout_max_sleep, backoff + jitter)
+    if status == 429:
+        retry_after = parse_retry_after_seconds(
+            getattr(getattr(exc, "response", None), "headers", {}).get("Retry-After")
+        )
+        if retry_after is not None and retry_after > 0:
+            return retry_after
+        backoff = retry_429_base_sleep * (2 ** max(int(attempt_idx), 0))
+        jitter = random.uniform(0.0, RETRY_429_JITTER)
+        return min(retry_429_max_sleep, backoff + jitter)
+    return max(float(default_sleep), 0.0)
 
 
 def load_requirements_csv(path: str) -> pd.DataFrame:
@@ -598,8 +900,12 @@ def call_llm_json(
 ) -> Dict[str, Any]:
     last_err = None
     log_path = os.path.join(out_dir, "raw_logs.jsonl") if out_dir else None
+    generic_retries = 0
+    rate_limit_retries = 0
+    timeout_retries = 0
+    attempt_idx = 0
 
-    for k in range(MAX_RETRIES + 1):
+    while True:
         txt = None
         fixed = None
         try:
@@ -612,7 +918,7 @@ def call_llm_json(
                     "round": round_idx,
                     "item": item,
                     "rater": rater.name,
-                    "attempt": k,
+                    "attempt": attempt_idx,
                     "temperature": float(temperature),
                     "kind": "raw",
                     "text": txt[:20000],
@@ -623,7 +929,7 @@ def call_llm_json(
                 if log_path:
                     _append_jsonl(log_path, {
                         "stage": stage, "round": round_idx, "item": item,
-                        "rater": rater.name, "attempt": k,
+                        "rater": rater.name, "attempt": attempt_idx,
                         "kind": "parsed_ok"
                     })
                 return data
@@ -638,7 +944,7 @@ def call_llm_json(
                         "round": round_idx,
                         "item": item,
                         "rater": rater.name,
-                        "attempt": k,
+                        "attempt": attempt_idx,
                         "kind": "fixed",
                         "text": fixed[:20000],
                         "error_raw_parse": str(e1),
@@ -648,7 +954,7 @@ def call_llm_json(
                 if log_path:
                     _append_jsonl(log_path, {
                         "stage": stage, "round": round_idx, "item": item,
-                        "rater": rater.name, "attempt": k,
+                        "rater": rater.name, "attempt": attempt_idx,
                         "kind": "fixed_parsed_ok"
                     })
                 return data
@@ -663,7 +969,7 @@ def call_llm_json(
                     "round": round_idx,
                     "item": item,
                     "rater": rater.name,
-                    "attempt": k,
+                    "attempt": attempt_idx,
                     "kind": "error",
                     "error": str(e),
                 })
@@ -674,21 +980,57 @@ def call_llm_json(
                 ts = int(time.time() * 1000)
 
                 if txt:
-                    p1 = os.path.join(out_dir, f"bad_json_{stage}_{rater.name}_{item or 'NA'}_raw_a{k}_{ts}.txt")
+                    p1 = os.path.join(out_dir, f"bad_json_{stage}_{rater.name}_{item or 'NA'}_raw_a{attempt_idx}_{ts}.txt")
                     with open(p1, "w", encoding="utf-8") as f:
                         f.write(txt)
 
                 if fixed:
-                    p2 = os.path.join(out_dir, f"bad_json_{stage}_{rater.name}_{item or 'NA'}_fixed_a{k}_{ts}.txt")
+                    p2 = os.path.join(out_dir, f"bad_json_{stage}_{rater.name}_{item or 'NA'}_fixed_a{attempt_idx}_{ts}.txt")
                     with open(p2, "w", encoding="utf-8") as f:
                         f.write(fixed)
 
-            time.sleep(RETRY_SLEEP)
+            status_code = get_http_status(e)
+            if isinstance(e, requests.exceptions.ReadTimeout):
+                max_timeout_retries = getattr(rater.provider, "max_timeout_retries", MAX_TIMEOUT_RETRIES)
+                if timeout_retries >= max_timeout_retries:
+                    break
+                timeout_retries += 1
+                sleep_s = compute_retry_delay_seconds(
+                    e,
+                    attempt_idx=attempt_idx,
+                    default_sleep=RETRY_SLEEP,
+                    retry_timeout_base_sleep=getattr(rater.provider, "retry_timeout_base_sleep", RETRY_TIMEOUT_BASE_SLEEP),
+                    retry_timeout_max_sleep=getattr(rater.provider, "retry_timeout_max_sleep", RETRY_TIMEOUT_MAX_SLEEP),
+                )
+            elif status_code == 429:
+                max_429_retries = getattr(rater.provider, "max_429_retries", MAX_429_RETRIES)
+                if rate_limit_retries >= max_429_retries:
+                    break
+                rate_limit_retries += 1
+                sleep_s = compute_retry_delay_seconds(
+                    e,
+                    attempt_idx=attempt_idx,
+                    default_sleep=RETRY_SLEEP,
+                    retry_429_base_sleep=getattr(rater.provider, "retry_429_base_sleep", RETRY_429_BASE_SLEEP),
+                    retry_429_max_sleep=getattr(rater.provider, "retry_429_max_sleep", RETRY_429_MAX_SLEEP),
+                )
+            else:
+                if generic_retries >= MAX_RETRIES:
+                    break
+                generic_retries += 1
+                sleep_s = compute_retry_delay_seconds(
+                    e,
+                    attempt_idx=attempt_idx,
+                    default_sleep=RETRY_SLEEP,
+                )
+
+            time.sleep(sleep_s)
+            attempt_idx += 1
 
     if isinstance(last_err, requests.exceptions.ReadTimeout):
         raise RuntimeError(f"[{rater.name}] TIMEOUT (skip): {last_err}") from last_err
     if isinstance(last_err, requests.exceptions.HTTPError):
-        status = getattr(getattr(last_err, "response", None), "status_code", None)
+        status = get_http_status(last_err)
         status_text = f"HTTP {status}" if status is not None else "HTTP ERROR"
         raise RuntimeError(f"[{rater.name}] {status_text} (skip): {last_err}") from last_err
     if isinstance(last_err, requests.exceptions.RequestException):
@@ -701,6 +1043,8 @@ def call_llm_json(
 
 
 def score_requirement(rater: Rater, item: str, text: str, out_dir: Optional[str] = None) -> Dict[str, Any]:
+    if rater.provider is None:
+        raise RuntimeError(f"[{rater.name}] Missing provider/API key for live scoring")
     messages = [
         {"role": "system", "content": SCORING_SYSTEM},
         {"role": "user", "content": SCORING_USER_TEMPLATE.format(item=item, text=text)},
@@ -1130,6 +1474,115 @@ def compute_weights_from_outliers(
     return weights, prof
 
 
+def build_default_model_profile(raters: List[str], weights: Dict[str, float]) -> pd.DataFrame:
+    w = normalize_weight_map(raters, weights)
+    rows = []
+    for r in raters:
+        rows.append({
+            "rater": r,
+            "G": 0.0,
+            "B": 0.0,
+            "weight_raw": float(w.get(r, 0.0)),
+            "weight": float(w.get(r, 0.0)),
+            "n_good": 0,
+            "n_bad": 0,
+            "n_uncertain": 0,
+            "n_outliers": 0,
+        })
+    return pd.DataFrame(rows, columns=MODEL_PROFILE_COLUMNS)
+
+
+def augment_missing_good_issue_rows(
+    issues_long: pd.DataFrame,
+    good_flags: pd.DataFrame,
+    ratings_long: pd.DataFrame,
+) -> pd.DataFrame:
+    if good_flags.empty:
+        return issues_long
+
+    have = issues_long[["rater", "item", "type"]].drop_duplicates() if not issues_long.empty else empty_df(["rater", "item", "type"])
+    miss = good_flags.merge(have, on=["rater", "item", "type"], how="left", indicator=True)
+    miss = miss[miss["_merge"] == "left_only"][["rater", "item", "type"]]
+    if miss.empty:
+        return issues_long
+
+    sug = ratings_long[["rater", "item", "dim", "suggestion"]].rename(columns={"dim": "type"})
+    miss = miss.merge(sug, on=["rater", "item", "type"], how="left")
+    miss["dimension"] = miss["type"].map(SHORT_DIM)
+    miss["evidence"] = ""
+    miss["rewrite"] = miss["suggestion"].fillna("")
+    miss = miss[["rater", "item", "type", "dimension", "evidence", "rewrite"]]
+    return pd.concat([issues_long, miss], ignore_index=True, sort=False)
+
+
+def prepare_treatment_context(
+    treatment: TreatmentConfig,
+    req_df: pd.DataFrame,
+    ratings_long: pd.DataFrame,
+    issues_long: pd.DataFrame,
+    raters: List[str],
+    prior_weights: Optional[Dict[str, float]] = None,
+) -> Dict[str, Any]:
+    weights = normalize_weight_map(raters, None if treatment.force_equal_weights else prior_weights)
+    model_profile = build_default_model_profile(raters, weights)
+    outlier_events = empty_df(OUTLIER_EVENT_COLUMNS)
+    outlier_quality = empty_df(OUTLIER_QUALITY_COLUMNS)
+    outlier_decisions = empty_df(OUTLIER_DECISION_COLUMNS)
+    q_map = empty_df(Q_MAP_COLUMNS)
+    candidate_pairs = empty_df(CANDIDATE_PAIR_COLUMNS)
+
+    if treatment.use_outlier_pipeline:
+        outlier_events = build_outlier_events(ratings_long, delta=DEFAULT_OUTLIER_DELTA)
+        outlier_quality, outlier_decisions = compute_outlier_quality(
+            outlier_events,
+            req_df,
+            issues_long,
+            tau_good=DEFAULT_TAU_GOOD,
+            tau_bad=DEFAULT_TAU_BAD,
+        )
+
+        if treatment.use_quality_scores and not outlier_quality.empty:
+            q_map = outlier_quality[["rater", "item", "dim", "Q"]].rename(columns={"dim": "type"})
+
+        if treatment.recompute_weights:
+            weights, model_profile = compute_weights_from_outliers(
+                outlier_quality,
+                outlier_decisions,
+                raters=raters,
+                prior_weights=weights,
+                lam_bad=DEFAULT_LAMBDA_BAD,
+                beta=DEFAULT_BETA_WEIGHT,
+            )
+        else:
+            model_profile = build_default_model_profile(raters, weights)
+
+        if treatment.fixed_candidate_pairs:
+            candidate_pairs = (
+                outlier_decisions[outlier_decisions["decision"] == "good"][["item", "dim"]]
+                .rename(columns={"dim": "type"})
+                .drop_duplicates()
+            ) if not outlier_decisions.empty else empty_df(CANDIDATE_PAIR_COLUMNS)
+            if candidate_pairs.empty:
+                candidate_pairs = issues_long[["item", "type"]].drop_duplicates() if not issues_long.empty else empty_df(CANDIDATE_PAIR_COLUMNS)
+
+            good_flags = (
+                outlier_decisions[outlier_decisions["decision"] == "good"][["rater", "item", "dim"]]
+                .rename(columns={"dim": "type"})
+            ) if not outlier_decisions.empty else empty_df(["rater", "item", "type"])
+            issues_long = augment_missing_good_issue_rows(issues_long, good_flags, ratings_long)
+            if not candidate_pairs.empty and not issues_long.empty:
+                issues_long = issues_long.merge(candidate_pairs, on=["item", "type"], how="inner")
+
+    return {
+        "weights": weights,
+        "model_profile": model_profile,
+        "outlier_events": outlier_events,
+        "outlier_quality": outlier_quality,
+        "outlier_decisions": outlier_decisions,
+        "candidate_pairs": candidate_pairs,
+        "q_map": q_map,
+        "issues_long": issues_long,
+    }
 
 
 # def issue_support_scores(issues_long: pd.DataFrame, ratings_long: pd.DataFrame, weights: Dict[str, float]) -> pd.DataFrame:
@@ -1465,30 +1918,23 @@ def team_issues_set(issue_scores: pd.DataFrame, theta: float) -> set:
     return set(map(tuple, s.to_records(index=False)))
 
 
-def run_roundtable(
+def collect_initial_scoring_outputs(
     raters: List[Rater],
     req_df: pd.DataFrame,
-    weights: Dict[str, float],
-    max_rounds: int,
-    topk_issues: int,
-    theta: float,
-    eps_score: float,
-    tau_jacc: float,
-    out_dir: str
+    out_dir: str,
+    round0_cache_dir: str = "",
+    require_round0_cache: bool = False,
 ) -> Dict[str, Any]:
-    """
-    Returns dict with final tables + history
-    """
-    req_map = dict(zip(req_df["item"], req_df["text"]))
-    ensure_dir(out_dir)
-
-    # ---------------- initial scoring
     all_ratings = []
     all_issues = []
     disabled_scoring_raters = set()
-    blocked_discussion_raters = set()
-
     raw_logs = []
+    cache_hits = 0
+    cache_misses = 0
+    cache_skips = 0
+
+    if round0_cache_dir:
+        ensure_dir(round0_cache_dir)
 
     for _, rrow in req_df.iterrows():
         item = rrow["item"]
@@ -1496,15 +1942,63 @@ def run_roundtable(
         for r in raters:
             if r.name in disabled_scoring_raters:
                 continue
-            try:
-                data = score_requirement(r, item, text, out_dir=out_dir)
-            except RuntimeError as e:
-                if is_skippable_rater_error(e):
-                    print(f"{e} -> disable rater for this case")
+
+            data = None
+            source = "live"
+            cache_status = "miss"
+
+            if round0_cache_dir:
+                cache_status, cached = load_round0_cache_entry(round0_cache_dir, r.name, item)
+                if cache_status == "hit":
+                    data = cached
+                    source = "round0_cache"
+                    cache_hits += 1
+                elif cache_status == "skip":
+                    cache_skips += 1
                     disabled_scoring_raters.add(r.name)
+                    raw_logs.append({
+                        "stage": "score",
+                        "rater": r.name,
+                        "item": item,
+                        "source": "round0_cache_error",
+                        "cache_status": cache_status,
+                        "error": cached.get("error", "") if isinstance(cached, dict) else "",
+                    })
                     continue
-                raise
-            raw_logs.append({"stage":"score", "rater":r.name, "item":item, "raw":data})
+
+            if data is None:
+                cache_misses += 1
+                if require_round0_cache:
+                    raise RuntimeError(f"Missing round-0 cache for rater={r.name}, item={item}")
+                try:
+                    data = score_requirement(r, item, text, out_dir=out_dir)
+                    if round0_cache_dir:
+                        save_round0_cache_payload(round0_cache_dir, r.name, item, data)
+                except RuntimeError as e:
+                    if is_skippable_rater_error(e):
+                        if round0_cache_dir:
+                            save_round0_cache_error(round0_cache_dir, r.name, item, str(e))
+                        print(f"{e} -> disable rater for this case")
+                        disabled_scoring_raters.add(r.name)
+                        raw_logs.append({
+                            "stage": "score",
+                            "rater": r.name,
+                            "item": item,
+                            "source": "live_error",
+                            "cache_status": cache_status,
+                            "error": str(e),
+                        })
+                        continue
+                    raise
+
+            raw_logs.append({
+                "stage": "score",
+                "rater": r.name,
+                "item": item,
+                "source": source,
+                "cache_status": cache_status,
+                "raw": data,
+            })
             rating_long, issues_long = flatten_scoring_output(r.name, item, data)
             all_ratings.append(rating_long)
             all_issues.append(issues_long)
@@ -1513,7 +2007,6 @@ def run_roundtable(
         raise RuntimeError("No successful rater outputs were collected for this case.")
 
     ratings_long = pd.concat(all_ratings, ignore_index=True)
-    # issues_long = pd.concat(all_issues, ignore_index=True)
     issues_long = pd.concat(all_issues, ignore_index=True)
     if disabled_scoring_raters:
         ratings_long = ratings_long[~ratings_long["rater"].isin(disabled_scoring_raters)].copy()
@@ -1525,44 +2018,73 @@ def run_roundtable(
     if not active_raters:
         raise RuntimeError("All raters were skipped during initial scoring for this case.")
 
-    # === Outlier -> quality -> prior-guided fixed weights ===
-    outlier_events = build_outlier_events(ratings_long, delta=DEFAULT_OUTLIER_DELTA)
-    outlier_quality, outlier_decisions = compute_outlier_quality(outlier_events, req_df, issues_long,
-                                                                  tau_good=DEFAULT_TAU_GOOD, tau_bad=DEFAULT_TAU_BAD)
-    # Q map for influence (rater,item,type)
-    q_map = outlier_quality[["rater","item","dim","Q"]].rename(columns={"dim":"type"}) if not outlier_quality.empty else pd.DataFrame(columns=["rater","item","type","Q"])
-    # Blend current-document evidence with the incoming prior instead of overriding it.
-    weights, model_profile = compute_weights_from_outliers(outlier_quality, outlier_decisions,
-                                                          raters=[r.name for r in active_raters],
-                                                          prior_weights=weights,
-                                                          lam_bad=DEFAULT_LAMBDA_BAD,
-                                                          beta=DEFAULT_BETA_WEIGHT)
+    return {
+        "ratings_long": ratings_long,
+        "issues_long": issues_long,
+        "raw_logs": raw_logs,
+        "active_raters": active_raters,
+        "disabled_scoring_raters": disabled_scoring_raters,
+        "round0_cache_stats": {
+            "cache_dir": round0_cache_dir,
+            "require_cache": bool(require_round0_cache),
+            "hits": int(cache_hits),
+            "misses": int(cache_misses),
+            "skip_markers": int(cache_skips),
+        },
+    }
 
-    # fixed issue candidate set: item×type where any 'good' outlier exists; fallback to all issues if none
-    candidate_pairs = (outlier_decisions[outlier_decisions["decision"]=="good"][["item","dim"]]
-                       .rename(columns={"dim":"type"})
-                       .drop_duplicates()) if (outlier_decisions is not None and not outlier_decisions.empty) else pd.DataFrame(columns=["item","type"])
-    if candidate_pairs.empty:
-        candidate_pairs = issues_long[["item","type"]].drop_duplicates() if not issues_long.empty else pd.DataFrame(columns=["item","type"])
 
-    # augment issues_long: ensure good-outlier raters have issue rows (evidence/rewrite) so prompts/final selection work
-    good_flags = outlier_decisions[outlier_decisions["decision"]=="good"][["rater","item","dim"]].rename(columns={"dim":"type"}) if not outlier_decisions.empty else pd.DataFrame(columns=["rater","item","type"])
-    if not good_flags.empty:
-        have = issues_long[["rater","item","type"]].drop_duplicates() if not issues_long.empty else pd.DataFrame(columns=["rater","item","type"])
-        miss = good_flags.merge(have, on=["rater","item","type"], how="left", indicator=True)
-        miss = miss[miss["_merge"]=="left_only"][["rater","item","type"]]
-        if not miss.empty:
-            sug = ratings_long[["rater","item","dim","suggestion"]].rename(columns={"dim":"type"})
-            miss = miss.merge(sug, on=["rater","item","type"], how="left")
-            miss["dimension"] = miss["type"].map(SHORT_DIM)
-            miss["evidence"] = ""
-            miss["rewrite"] = miss["suggestion"].fillna("")
-            miss = miss[["rater","item","type","dimension","evidence","rewrite"]]
-            issues_long = pd.concat([issues_long, miss], ignore_index=True, sort=False)
+def run_roundtable(
+    raters: List[Rater],
+    req_df: pd.DataFrame,
+    weights: Dict[str, float],
+    max_rounds: int,
+    topk_issues: int,
+    theta: float,
+    eps_score: float,
+    tau_jacc: float,
+    out_dir: str,
+    treatment: TreatmentConfig,
+    round0_cache_dir: str = "",
+    require_round0_cache: bool = False,
+) -> Dict[str, Any]:
+    """
+    Returns dict with final tables + history
+    """
+    req_map = dict(zip(req_df["item"], req_df["text"]))
+    ensure_dir(out_dir)
 
-    # keep only candidate pairs in issues_long going forward
-    if not candidate_pairs.empty and not issues_long.empty:
-        issues_long = issues_long.merge(candidate_pairs, on=["item","type"], how="inner")
+    blocked_discussion_raters = set()
+    initial = collect_initial_scoring_outputs(
+        raters=raters,
+        req_df=req_df,
+        out_dir=out_dir,
+        round0_cache_dir=round0_cache_dir,
+        require_round0_cache=require_round0_cache,
+    )
+    ratings_long = initial["ratings_long"]
+    issues_long = initial["issues_long"]
+    raw_logs = initial["raw_logs"]
+    active_raters = initial["active_raters"]
+    disabled_scoring_raters = initial["disabled_scoring_raters"]
+    round0_cache_stats = initial["round0_cache_stats"]
+
+    prep = prepare_treatment_context(
+        treatment=treatment,
+        req_df=req_df,
+        ratings_long=ratings_long,
+        issues_long=issues_long,
+        raters=[r.name for r in active_raters],
+        prior_weights=weights,
+    )
+    weights = prep["weights"]
+    model_profile = prep["model_profile"]
+    outlier_events = prep["outlier_events"]
+    outlier_quality = prep["outlier_quality"]
+    outlier_decisions = prep["outlier_decisions"]
+    candidate_pairs = prep["candidate_pairs"]
+    q_map = prep["q_map"]
+    issues_long = prep["issues_long"]
 
 
     # store round 0
@@ -1747,7 +2269,7 @@ def run_roundtable(
         issues_by_round[t+1] = pd.concat(next_issues_rows, ignore_index=True)
 
         # keep only fixed candidates in issues table
-        if not candidate_pairs.empty and not issues_by_round[t + 1].empty:
+        if treatment.fixed_candidate_pairs and not candidate_pairs.empty and not issues_by_round[t + 1].empty:
             issues_by_round[t + 1] = issues_by_round[t + 1].merge(candidate_pairs, on=["item", "type"],how="inner")
         prev_team_scores = team_scores
         prev_issue_set = cur_issue_set
@@ -1788,9 +2310,17 @@ def run_roundtable(
             "best_rewrite": top["rewrite"],
             "top_supporters": json.dumps(top_supporters, ensure_ascii=False),
         })
-    best = pd.DataFrame(best_rows)
+    best = pd.DataFrame(
+        best_rows,
+        columns=["item", "type", "dimension", "best_evidence", "best_rewrite", "top_supporters"],
+    )
 
-    probs = probs.merge(best, on=["item","type","dimension"], how="left")
+    if best.empty:
+        probs["best_evidence"] = ""
+        probs["best_rewrite"] = ""
+        probs["top_supporters"] = "[]"
+    else:
+        probs = probs.merge(best, on=["item","type","dimension"], how="left")
 
     # Also save a run summary (do NOT overwrite call_llm_json()'s raw_logs.jsonl)
     with open(os.path.join(out_dir, "run_summary.jsonl"), "w", encoding="utf-8") as f:
@@ -1798,6 +2328,8 @@ def run_roundtable(
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     return {
+        "treatment": treatment.key,
+        "treatment_label": treatment.label,
         "final_round": final_round,
         "weights": weights,
         "model_profile": model_profile,
@@ -1812,13 +2344,28 @@ def run_roundtable(
         "team_scores_by_round": team_scores_by_round,
         "history": pd.DataFrame(hist),
         "final_problems": probs.sort_values("S_issue", ascending=False).reset_index(drop=True),
+        "run_meta": {
+            "treatment": treatment.key,
+            "treatment_label": treatment.label,
+            "treatment_config": json.dumps(asdict(treatment), ensure_ascii=False),
+            "active_raters": json.dumps([r.name for r in active_raters], ensure_ascii=False),
+            "disabled_scoring_raters": json.dumps(sorted(disabled_scoring_raters), ensure_ascii=False),
+            "blocked_discussion_raters": json.dumps(sorted(blocked_discussion_raters), ensure_ascii=False),
+            "round0_cache_dir": str(round0_cache_dir or ""),
+            "round0_require_cache": bool(require_round0_cache),
+            "round0_cache_hits": int(round0_cache_stats["hits"]),
+            "round0_cache_misses": int(round0_cache_stats["misses"]),
+            "round0_cache_skip_markers": int(round0_cache_stats["skip_markers"]),
+            "max_rounds": int(max_rounds),
+            "theta": float(theta),
+        },
     }
 
 
 # =========================
 # 7) Main / CLI
 # =========================
-def load_raters_from_models_json(models_json: str) -> List[Rater]:
+def load_raters_from_models_json(models_json: str, allow_missing_api_keys: bool = False) -> List[Rater]:
     with open(models_json, "r", encoding="utf-8") as f:
         cfg = json.load(f)
     raters_cfg = cfg.get("raters", [])
@@ -1832,8 +2379,23 @@ def load_raters_from_models_json(models_json: str) -> List[Rater]:
         api_key_env = str(rc.get("api_key_env","")).strip()
         api_key = os.environ.get(api_key_env, "") if api_key_env else ""
         if not api_key:
+            if allow_missing_api_keys:
+                raters.append(Rater(name=name, provider=None))
+                continue
             raise ValueError(f"Missing API key for rater '{name}'. Set env '{api_key_env}'.")
-        prov = OpenAICompatProvider(base_url=base_url, api_key=api_key, model=model)
+        prov = OpenAICompatProvider(
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            timeout=float(rc.get("timeout", DEFAULT_REQUEST_TIMEOUT)),
+            min_interval_sec=float(rc.get("min_interval_sec", DEFAULT_MIN_REQUEST_INTERVAL)),
+            max_429_retries=int(rc.get("max_429_retries", MAX_429_RETRIES)),
+            retry_429_base_sleep=float(rc.get("retry_429_base_sleep", RETRY_429_BASE_SLEEP)),
+            retry_429_max_sleep=float(rc.get("retry_429_max_sleep", RETRY_429_MAX_SLEEP)),
+            max_timeout_retries=int(rc.get("max_timeout_retries", MAX_TIMEOUT_RETRIES)),
+            retry_timeout_base_sleep=float(rc.get("retry_timeout_base_sleep", RETRY_TIMEOUT_BASE_SLEEP)),
+            retry_timeout_max_sleep=float(rc.get("retry_timeout_max_sleep", RETRY_TIMEOUT_MAX_SLEEP)),
+        )
         raters.append(Rater(name=name, provider=prov))
     return raters
 
@@ -1841,6 +2403,13 @@ def load_raters_from_models_json(models_json: str) -> List[Rater]:
 def export_excel(out_xlsx: str, req_df: pd.DataFrame, weights: Dict[str,float], result: Dict[str,Any]):
     with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
         req_df.to_excel(writer, sheet_name="requirements", index=False)
+
+        if "run_meta" in result and isinstance(result["run_meta"], dict):
+            meta_df = pd.DataFrame(
+                [{"key": k, "value": v} for k, v in result["run_meta"].items()],
+                columns=["key", "value"],
+            )
+            meta_df.to_excel(writer, sheet_name="run_meta", index=False)
 
         wdf = pd.DataFrame({"rater": list(weights.keys()), "weight": list(weights.values())}).sort_values("weight", ascending=False)
         wdf.to_excel(writer, sheet_name="weights", index=False)
@@ -1880,6 +2449,14 @@ def main():
     ap.add_argument("--models", required=True, help="models.json (OpenAI-compatible endpoints)")
     ap.add_argument("--out", default="roundtable_report.xlsx", help="output Excel file")
     ap.add_argument("--out_dir", default="roundtable_logs", help="output directory for logs")
+    ap.add_argument(
+        "--treatment",
+        default="full_method",
+        help="experimental condition: single_llm | equal_weight_aggregation | roundtable_no_weighting | full_method",
+    )
+    ap.add_argument("--single_rater", default="", help="required with --treatment single_llm when models.json contains multiple raters")
+    ap.add_argument("--round0_cache_dir", default="", help="directory for per-rater round-0 scoring cache")
+    ap.add_argument("--require_round0_cache", action="store_true", help="fail instead of calling APIs when a round-0 cache entry is missing")
     ap.add_argument("--topk", type=int, default=DEFAULT_TOPK_ISSUES, help="top-K issues to discuss each round")
     ap.add_argument("--rounds", type=int, default=DEFAULT_MAX_ROUNDS, help="max rounds")
     ap.add_argument("--theta_ratio", type=float, default=DEFAULT_THETA_RATIO, help="Theta ratio * sum(weights)")
@@ -1896,11 +2473,19 @@ def main():
 
     args = ap.parse_args()
 
+    treatment = resolve_treatment_config(args.treatment)
     req_df = load_requirements_csv(args.requirements)
-    raters = load_raters_from_models_json(args.models)
+    allow_missing_api_keys = bool(args.require_round0_cache) and (not treatment.use_roundtable)
+    raters = select_treatment_raters(
+        load_raters_from_models_json(args.models, allow_missing_api_keys=allow_missing_api_keys),
+        treatment=treatment,
+        single_rater=args.single_rater,
+    )
     rater_names = [r.name for r in raters]
 
-    if args.weights_csv:
+    if treatment.force_equal_weights:
+        weights = {r: 1.0 / len(rater_names) for r in rater_names}
+    elif args.weights_csv:
         weights = load_weights_csv(args.weights_csv)
     elif args.analyze_xlsx:
         # optional: reuse prior analysis as a fixed prior; run_roundtable will blend it with current-document evidence
@@ -1920,17 +2505,26 @@ def main():
     weights = {r: weights.get(r, 0.0) / wsum for r in rater_names}
 
     theta = float(args.theta_ratio) * sum(weights.values())  # if normalized -> theta_ratio
+    effective_rounds = int(args.rounds) if treatment.use_roundtable else 0
+    print(f"Treatment: {treatment.label} ({treatment.key})")
+    print(f"Raters: {', '.join(rater_names)}")
+    if args.round0_cache_dir:
+        print(f"Round-0 cache: {args.round0_cache_dir}")
+        print(f"Require cache: {bool(args.require_round0_cache)}")
 
     result = run_roundtable(
         raters=raters,
         req_df=req_df,
         weights=weights,
-        max_rounds=int(args.rounds),
+        max_rounds=effective_rounds,
         topk_issues=int(args.topk),
         theta=theta,
         eps_score=float(args.eps_score),
         tau_jacc=float(args.tau_jacc),
-        out_dir=args.out_dir
+        out_dir=args.out_dir,
+        treatment=treatment,
+        round0_cache_dir=args.round0_cache_dir,
+        require_round0_cache=bool(args.require_round0_cache),
     )
 
     export_excel(args.out, req_df, result.get("weights", weights), result)

@@ -4,31 +4,46 @@
       "name": "deepseek",
       "base_url": "https://api.deepseek.com",
       "api_key_env": "DEEPSEEK_API_KEY",
-      "model": "deepseek-reasoner"
+      "model": "deepseek-reasoner",
+      "min_interval_sec": 1.5
     },
     {
       "name": "qwen",
       "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "api_key_env": "DASHSCOPE_API_KEY",
-      "model": "qwen-plus"
+      "model": "qwen-plus",
+      "min_interval_sec": 1.5
     },
     {
       "name": "openai_gpt",
       "base_url": "https://api.openai.com/v1",
       "api_key_env": "OPENAI_API_KEY",
-      "model": "gpt-5.1"
+      "model": "gpt-5.1",
+      "min_interval_sec": 3.0,
+      "max_429_retries": 5,
+      "retry_429_base_sleep": 8.0,
+      "retry_429_max_sleep": 90.0
     },
     {
       "name": "kimi",
       "base_url": "https://api.moonshot.cn/v1",
       "api_key_env": "MOONSHOT_API_KEY",
-      "model": "kimi-k2-0905-preview"
+      "model": "kimi-k2-0905-preview",
+      "min_interval_sec": 2.0
     },
     {
       "name": "glm5",
       "base_url": "https://open.bigmodel.cn/api/paas/v4",
       "api_key_env": "ZHIPU_API_KEY",
-      "model": "glm-5"
+      "model": "glm-5",
+      "timeout": 180.0,
+      "min_interval_sec": 3.0,
+      "max_429_retries": 5,
+      "retry_429_base_sleep": 8.0,
+      "retry_429_max_sleep": 90.0,
+      "max_timeout_retries": 2,
+      "retry_timeout_base_sleep": 12.0,
+      "retry_timeout_max_sleep": 90.0
     }
 
   ]
