@@ -1,91 +1,179 @@
-# ICSE2027 多LLM需求质量评审混合项目
+# Multi-LLM Requirements Review Engineering Artifact
 
-## 项目性质
-这是一个“论文写作 + 项目代码 + 实验数据分析”混合项目。
+This repository contains an engineering research prototype for per-requirement software requirements review with multiple heterogeneous large language models. The project treats model disagreement as a structured signal and turns it into a reproducible workflow for producing a team-level issue list.
 
-项目当前目标不是单纯生成论文，而是围绕以下工作持续迭代：
-- 理解并修复项目代码
-- 运行与排查实验流程
-- 分析实验数据与结果
-- 基于真实结果生成和修订论文内容
-- 逐步打磨为面向 ICSE 2027 Research Track 的论文与可复现项目
+This README is focused on the engineering artifact: data flow, scripts, model orchestration, outputs, and reproducibility. It does not document manuscript drafting or writing tasks.
 
-## 当前研究主题
-本项目研究在软件需求逐条评审（per-requirement requirements review）中，
-如何利用多异构大语言模型之间的结构化分歧，而不是简单使用多数表决或均值聚合，
-从而生成更高质量、更可执行的团队级需求问题清单。
+## Overview
 
-## 当前固定研究设定
-- 分析粒度：per-requirement
-- 质量维度：U / A / C / V
-- 方法主线：
-  1. 多LLM结构化评分
-  2. 离群事件预筛
-  3. 论证质量向量评分
-  4. 好离群 / 坏离群 / uncertain 判别
-  5. 模型画像与固定权重
-  6. 固定权重 + 动态置信度圆桌共识
-  7. 最终问题清单提取
-- 最终输出：可执行的团队级问题清单，而不是简单平均分
+Traditional multi-model aggregation often assumes that consensus is more reliable than disagreement. In requirements review, that assumption is not always sufficient: a minority model can surface a concrete, testable, and actionable issue that majority voting would suppress.
 
-## 根目录文件说明
-- `AGENTS.md`：全项目总规则
-- `project_context.md`：研究背景、RQ、方法主线、不可变设定
-- `paper/`：论文相关文件
-- `scripts/`：代码、脚本、分析逻辑
-- `data/`：原始数据、处理中间结果、ground truth
-- `outputs/`：实验输出、图表、日志、报告
-- `refs/`：参考文献与文献PDF
-- `notes/`：项目笔记、任务拆解、风险清单
+The system therefore evaluates requirements at the `per-requirement` level and uses a fixed taxonomy:
 
-## 使用顺序
-执行任何复杂任务前，建议按以下顺序读取：
-1. 根目录 `AGENTS.md`
-2. `project_context.md`
-3. 当前任务所在目录下的 `AGENTS.md`
-4. 相关代码 / 数据 / 论文文件
+- `U`: Understandable
+- `A`: Unambiguous
+- `C`: Correctness
+- `V`: Verifiable
 
-## 任务类型与建议入口
-### 论文相关任务
-去 `paper/`
-典型任务：
-- 写 Abstract / Introduction / Related Work
-- 对齐 Methodology / Experimental Design / Results
-- 按 ICSE 风格重构贡献表述
+The final artifact is not an averaged score. The target output is a team-level issue list containing issue type, evidence, suggested rewrite, and supporting model information.
 
-### 代码相关任务
-去 `scripts/`
-典型任务：
-- 理解 pipeline
-- 修 bug
-- 对接 API
-- 修复 JSON 解析 / 日志 / roundtable 逻辑
-- 跑实验与验证输出
+## Core Workflow
 
-### 数据相关任务
-去 `data/`
-典型任务：
-- 检查 raw / processed / ground truth 的一致性
-- 分析数据格式
-- 明确哪些数据可改、哪些不可改
+The implemented workflow has seven stages:
 
-### 结果分析任务
-去 `outputs/`
-典型任务：
-- 汇总表格
-- 解释结果
-- 检查实验输出是否支持论文 claim
-- 追踪不同 run 的差异
+1. Structured scoring: each model scores every requirement across U/A/C/V and provides confidence, rationale, evidence, and rewrite suggestions.
+2. Outlier prescreening: score deviations are detected against the model-group median.
+3. Argument-quality vectoring: outlier events are mapped to quality features such as evidence sufficiency, testability, rewrite actionability, specificity, taxonomy fit, and novelty.
+4. Outlier classification: events are categorized as `good`, `bad`, or `uncertain` outliers.
+5. Model profiling: model-level histories of good and bad outliers are converted into fixed global weights.
+6. Roundtable consensus: models revise issue candidates through a roundtable process using fixed weights and dynamic confidence.
+7. Final issue extraction: the system emits a consolidated issue list rather than a single document-level score.
 
-## 当前项目原则
-1. 任何写作都必须基于真实实验与真实结果。
-2. 任何代码修改都优先做最小补丁。
-3. 任何分析都必须说明基于哪一批输出、哪一个脚本、哪一个版本。
-4. 任何没有数据支撑的地方，不得编造数字、显著性、效应量或结论。
-5. 如果论文、代码、结果三者之间存在冲突，必须先指出冲突，再处理。
+## Engineering Components
 
-## 当前最需要重点推进的工作
-- 梳理和固化代码 / 数据 / 输出目录边界
-- 用 Codex 先理解现有项目代码与输出结构
-- 再基于真实结果完善中文论文
-- 最后逐步增强 ICSE 风格的定位与论证
+```text
+.
+|-- AGENTS.md                  # project-level operating rules and invariants
+|-- project_context.md          # research configuration and fixed workflow assumptions
+|-- data/                       # input requirements, annotations, and ground truth assets
+|-- outputs/                    # generated reports, logs, caches, and analysis artifacts
+|-- scripts/                    # scoring, roundtable, ground-truth, and analysis scripts
+|-- tests/                      # unit tests for key roundtable and cache behaviors
+`-- README.md
+```
+
+Important engineering entry points:
+
+- `scripts/roundtable/roundtable_req_reconcile.py`: main per-requirement roundtable engine.
+- `scripts/roundtable/models.json`: model endpoint and API-key environment configuration.
+- `scripts/roundtable/run_all_requirements.ps1`: batch runner for requirement CSV files.
+- `scripts/roundtable/run_cached_equal_weight_cases.ps1`: cached equal-weight baseline runner.
+- `scripts/roundtable/run_cached_roundtable_no_weighting_cases.ps1`: cached unweighted roundtable baseline runner.
+- `scripts/roundtable/run_cached_single_llm_cases.ps1`: cached single-model baseline runner.
+- `scripts/scoring/analyze_llm_likert_scores.py`: analyzer for initial Likert-style model scores.
+- `scripts/analysis/analyze_experiment_results.py`: analysis entry point for generated experiment artifacts.
+- `scripts/analysis/ground_truth_expert_agreement.py`: expert-annotation agreement analysis.
+- `scripts/analysis/build_final_ground_truth.py`: final ground-truth construction from expert and adjudication files.
+- `scripts/analysis/report_final_ground_truth.py`: ground-truth report generation.
+
+## Input and Output Conventions
+
+Requirement inputs are CSV files, typically with this schema:
+
+```csv
+item,text
+R1,"Requirement text..."
+R2,"Requirement text..."
+```
+
+The roundtable engine produces Excel reports and JSONL logs. Depending on the treatment, reports may include sheets such as:
+
+- `requirements`
+- `ratings_r0`
+- `issues_r0`
+- `final_problems`
+- `outlier_events`
+- `outlier_quality`
+- `outlier_decisions`
+- `model_profile`
+- `round_history`
+- `weights`
+
+Generated outputs are written under `outputs/`. Historical outputs should be treated as versioned artifacts: any analysis should state the exact output directory or run timestamp being used.
+
+## Experimental Treatments
+
+The current runner supports these treatment modes:
+
+- `single_llm`: a single configured rater is used as the baseline.
+- `equal_weight_aggregation`: multiple raters are aggregated with equal weights and no roundtable.
+- `roundtable_no_weighting`: roundtable consensus is used without learned/fixed model weighting.
+- `full_method`: outlier-quality classification, model profiling, fixed weighting, and dynamic-confidence roundtable are enabled.
+
+Treatment names are implemented in `scripts/roundtable/roundtable_req_reconcile.py` and used by the PowerShell batch runners.
+
+## Environment Setup
+
+The project currently does not define a locked dependency file. From the implemented scripts, the practical Python dependencies are:
+
+```powershell
+python -m pip install pandas numpy scipy openpyxl requests
+```
+
+Recommended runtime:
+
+- Python 3.10 or newer
+- PowerShell for batch experiment scripts
+- Network access and provider API keys only when live model calls are required
+
+Model API keys are read from environment variables configured in `scripts/roundtable/models.json`, for example:
+
+```powershell
+$env:DEEPSEEK_API_KEY="..."
+$env:DASHSCOPE_API_KEY="..."
+$env:OPENAI_API_KEY="..."
+$env:MOONSHOT_API_KEY="..."
+$env:ZHIPU_API_KEY="..."
+```
+
+For reproducible or low-cost reruns, prefer cached workflows with `outputs/caches/round0/` instead of triggering fresh model calls.
+
+## Common Commands
+
+Run tests:
+
+```powershell
+python -m unittest discover -s tests
+```
+
+Analyze initial LLM rating files:
+
+```powershell
+python scripts/scoring/analyze_llm_likert_scores.py
+```
+
+Run the main batch workflow:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/roundtable/run_all_requirements.ps1
+```
+
+Force the main runner to use existing round-0 cache entries:
+
+```powershell
+$env:ROUNDTABLE_REQUIRE_ROUND0_CACHE="true"
+powershell -ExecutionPolicy Bypass -File scripts/roundtable/run_all_requirements.ps1
+```
+
+Run cached baseline comparisons:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/roundtable/run_cached_equal_weight_cases.ps1
+powershell -ExecutionPolicy Bypass -File scripts/roundtable/run_cached_roundtable_no_weighting_cases.ps1
+powershell -ExecutionPolicy Bypass -File scripts/roundtable/run_cached_single_llm_cases.ps1 -SingleRater qwen
+```
+
+Analyze generated experiment artifacts:
+
+```powershell
+python scripts/analysis/analyze_experiment_results.py --full-root outputs/reports/roundtable_conference/output --compare-root outputs/reports/compare_treatments --cache-root outputs/caches/round0 --ground-truth data/ground_truth/GT/final_ground_truth_current11_v1.csv
+```
+
+If a new full-method run is written to another directory, update `--full-root` accordingly.
+
+## Reproducibility Rules
+
+- Do not overwrite `data/raw/` files.
+- Treat `data/ground_truth/` as high-sensitivity data; do not regenerate it without checking the intended version.
+- Prefer adding a new timestamped output directory over overwriting historical outputs.
+- When reporting metrics, always reference the exact `outputs/` directory and generated report.
+- Do not infer unsupported conclusions from partial outputs or incomplete treatment coverage.
+- Keep `per-requirement` granularity and the U/A/C/V taxonomy fixed unless the research configuration is intentionally changed.
+
+## Current Status
+
+The repository is an active engineering research prototype. It includes executable scripts, cached model outputs, treatment comparison artifacts, ground-truth utilities, and tests for selected core behaviors. Some result directories are historical runs and should be interpreted only with their path and timestamp.
+
+## License
+
+No open-source license is currently declared in this artifact. Add a license and data-use statement before public release.
