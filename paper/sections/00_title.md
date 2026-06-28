@@ -1,4 +1,1 @@
-# Title
-
-Beyond Majority Vote: Improving Multi-LLM Requirements Review via Good Outlier Recognition and Roundtable Consensus
-
+# Beyond Majority Vote: Improving Per-Requirement Quality Assessment via Good Outlier Recognition and Roundtable Consensus
