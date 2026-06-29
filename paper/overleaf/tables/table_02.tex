@@ -1,0 +1,60 @@
+\begin{table*}[t]
+\centering
+\caption{Treatments, baselines, and ablation settings.}
+\label{tab:treatments_baselines}
+\renewcommand{\arraystretch}{1.15}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{p{2.6cm}p{3.2cm}p{2.2cm}p{2.2cm}p{2.2cm}p{4.0cm}}
+\toprule
+\textbf{Treatment} &
+\textbf{Input and aggregation setting} &
+\textbf{Outlier quality validation} &
+\textbf{Fixed model weights} &
+\textbf{Roundtable discussion} &
+\textbf{Purpose in evaluation} \\
+\midrule
+
+\textbf{Single-LLM} &
+Each LLM independently produces U/A/C/V scores, confidence, evidence, and rewrite suggestions for each requirement. No cross-model aggregation is applied. &
+No &
+No &
+No &
+Estimates the standalone capability of individual LLM reviewers and serves as the lower-level reference for assessing the benefit of multi-LLM collaboration. \\
+
+\midrule
+
+\textbf{Equal-Weight Aggregation} &
+All LLMs share the same round-0 structured outputs. Candidate issue scores are aggregated under equal model influence. &
+No &
+No; all models are treated equally. &
+No &
+Tests whether simply combining multiple LLMs improves issue-list generation without disagreement validation or interactive consensus. \\
+
+\midrule
+
+\textbf{Roundtable No Weighting} &
+Uses the same round-0 outputs and candidate issues as the other multi-LLM settings. Models participate in multi-round discussion. &
+No explicit good/bad outlier validation for model weighting. &
+No; all models retain equal influence during discussion. &
+Yes; dynamic confidence is updated across rounds. &
+Isolates the contribution of the roundtable discussion mechanism while removing reliability-aware fixed weights. \\
+
+\midrule
+
+\textbf{Full Method} &
+Uses the complete structured scoring output, including scores, confidence, evidence, and rewrite suggestions. &
+Yes; outlier events are assessed using the argument quality vector and hard-fail rules. &
+Yes; document-specific fixed weights are derived from good- and bad-outlier evidence. &
+Yes; fixed weights are combined with dynamic confidence during multi-round consensus. &
+Evaluates the complete outlier-aware consensus workflow, including disagreement validation, model profiling, and roundtable-based final issue-list extraction. \\
+
+\bottomrule
+\end{tabular}%
+}
+
+\vspace{0.4em}
+\begin{minipage}{0.97\textwidth}
+\footnotesize
+\textit{Note.} All treatments are evaluated on the same requirement documents and share the same initial round-0 LLM outputs whenever applicable. This paired design controls for stochastic variation in LLM generation and allows the ablation comparisons to isolate the effects of equal aggregation, roundtable discussion, and reliability-aware fixed weighting.
+\end{minipage}
+\end{table*}

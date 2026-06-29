@@ -1,0 +1,47 @@
+\begin{table*}[t]
+\centering
+\caption{Evaluation metrics and statistical tests by research question.}
+\label{tab:metrics_tests_by_rq}
+\renewcommand{\arraystretch}{1.15}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{p{1.1cm}p{3.1cm}p{4.1cm}p{3.7cm}p{3.0cm}}
+\toprule
+\textbf{RQ} &
+\textbf{Analysis focus} &
+\textbf{Evaluation metrics} &
+\textbf{Statistical tests} &
+\textbf{Interpretation target} \\
+\midrule
+
+\textbf{RQ1} &
+Initial differences among individual LLMs in per-requirement quality issue identification. &
+Score distribution by dimension; dimension-wise mean and median scores; inter-model agreement using ordinal Krippendorff's $\alpha$; outlier-event count and outlier rate under $|score-median|\geq 2$; distribution of outliers across U/A/C/V. &
+Descriptive agreement analysis; Friedman test on document-level outlier rates across U/A/C/V; post-hoc paired Wilcoxon signed-rank tests with Holm correction when needed; non-parametric effect size reporting. &
+Determines whether LLM disagreement is random noise or a structured signal that varies systematically by quality dimension. \\
+
+\midrule
+
+\textbf{RQ2} &
+Effectiveness and trade-off of the proposed outlier-aware consensus workflow compared with individual LLMs and aggregation baselines. &
+Argument quality score $Q$; good/bad/uncertain outlier counts; hard-fail rate; Macro-Precision, Macro-Recall, and Macro-F1 against GT; average predicted issue-list size; issue-set Jaccard similarity; final max score difference; retention and reduction of candidate issues. &
+Mann--Whitney U tests for good vs. bad and good vs. non-good outlier separation; Friedman test for document-level comparison across treatments; paired Wilcoxon signed-rank tests with Holm correction for post-hoc treatment comparisons; Cliff's $\delta$ for non-parametric effect size. &
+Assesses whether the workflow separates high-value disagreement from low-quality deviation and whether it produces a more compact, stable, and GT-aligned issue list than the baselines. \\
+
+\midrule
+
+\textbf{RQ3} &
+Variation of workflow performance across requirements documents and quality dimensions. &
+Document-level Macro-Precision, Macro-Recall, and Macro-F1; per-document issue-list size; dimension-wise precision, recall, F1, and final issue distribution; initial-to-final dimension shift; candidate-retention rate by document and by dimension. &
+Block-wise descriptive analysis by document; Friedman or Kruskal--Wallis tests for cross-dimension variation when applicable; paired Wilcoxon tests for initial-to-final shifts; Spearman correlation for associations between document characteristics and performance indicators. &
+Identifies the contexts and quality dimensions where the workflow is most effective, and clarifies its limits under sparse positives, low defect density, or dimension-specific imbalance. \\
+
+\bottomrule
+\end{tabular}%
+}
+
+\vspace{0.4em}
+\begin{minipage}{0.97\textwidth}
+\footnotesize
+\textit{Note.} Statistical comparisons are conducted at the document level whenever treatment-level performance is compared, so that each requirements document acts as a paired block. This design avoids treating heterogeneous requirement items as independent observations and reduces the risk of inflated significance caused by document-level heterogeneity.
+\end{minipage}
+\end{table*}

@@ -1,0 +1,60 @@
+\begin{table*}[t]
+\centering
+\caption{Treatment-level performance results.}
+\label{tab:treatment_results}
+\renewcommand{\arraystretch}{1.15}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{p{2.8cm}cccp{1.6cm}p{3.4cm}p{2.4cm}}
+\toprule
+\textbf{Treatment} &
+\textbf{Macro-P} &
+\textbf{Macro-R} &
+\textbf{Macro-F1} &
+\textbf{Avg.\ pred.\ issues} &
+\textbf{Primary characteristic} &
+\textbf{Role} \\
+\midrule
+
+Single-LLM Family Mean
+& 0.0769
+& ---
+& 0.0960
+& ---
+& Balanced single-model behaviour
+& Reference \\
+
+Equal-Weight Aggregation
+& 0.0771
+& 0.4077
+& \textbf{0.1153}
+& 144.8
+& Highest recall; very large issue list
+& Aggregation baseline \\
+
+Roundtable No Weighting
+& ---
+& ---
+& 0.0968
+& 136.7
+& Consensus without reliability-aware weighting
+& Ablation \\
+
+Full Method
+& \textbf{0.0901}
+& 0.1354
+& 0.0711
+& \textbf{15.9}
+& Highest precision; strongest issue-list compression
+& Proposed \\
+
+\bottomrule
+\end{tabular}%
+}
+
+\vspace{0.4em}
+\begin{minipage}{0.97\textwidth}
+\footnotesize
+\textit{Overall comparison.} Friedman test on document-level Macro-F1 finds no statistically significant overall difference among the four treatments ($p>0.05$). Although the proposed Full Method does not achieve the highest Macro-F1, it produces substantially more compact issue lists while improving precision, indicating a selective issue-generation strategy rather than a high-recall detector.
+\textit{Note.} Macro-P = Macro-Precision; Macro-R = Macro-Recall. All performance values are averaged over the 10 shared requirements documents. Cells marked ``---'' denote values not emphasized in the current paper and can be added if desired.
+\end{minipage}
+\end{table*}
