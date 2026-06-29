@@ -225,7 +225,9 @@ w_r = \operatorname{softmax}\big(\eta \cdot \mathrm{score}_{doc}(r)\big), \qquad
 \label{sec:analysis}
 统计分析严格以“Document”为单位进行 Block 处理，以防止直接混合异质需求条目引发辛普森悖论。本文统一采用 $\alpha=0.05$ 作为显著性水平，并同时报告非参数效应量，结合显著性与实际指标提升幅度共同解释实验结果。解答 RQ1（分歧结构）采用 Friedman 检验分析不同质量维度（U/A/C/V）触发强离群事件的频率是否存在显著差异；解答 RQ2（判别有效性）采用 Mann--Whitney U 检验比较“好离群”与“坏离群”在 $Q$ 分数及子维度得分上是否实现显著分离，并计算 Cliff's $\delta$ 效应量；解答 RQ3（框架性能与消融）由于同一份文档在四种处理条件下均被评估，采用全局 Friedman 检验分析 Macro-F1 等指标的差异，若全局差异显著则使用 Holm--Bonferroni 事后校正依次进行两两成对比较，同时绘制 Jaccard 相似度曲线与分数波动衰减图，直观展示系统的收敛轨迹。
 
-\input{tables/table_03.tex}
+% 按表格规划图，Metrics/Tests 表未列入图中表清单（图无此表），此处暂不显示。
+% 如需保留该评测协议表，取消下一行注释即可：
+% \input{tables/table_03.tex}
 
 \section{Results}
 \label{sec:results}
@@ -254,8 +256,6 @@ RQ2 评估本文提出的 outlier-aware consensus workflow 在生成逐条需求
 \subsubsection{Good and Bad Outlier Separation}
 对 60 个离群事件进行论证质量评分与决策后，当前规则下共有 26 个事件被判定为 \texttt{good}，15 个被判定为 \texttt{bad}，19 个被判定为 \texttt{uncertain}。整体 hard-fail 率为 $21.67\%$，且触发 hard-fail 的事件最终 $100.00\%$ 被归入 \texttt{bad}，证明该底线规则有效拦截了低质量偏离。综合论证质量分在三类离群之间呈现出清晰分层：\texttt{good} 事件的中位数为 $0.7500$，均值为 $0.7788$；\texttt{bad} 事件的中位数为 $0.2500$，均值为 $0.3056$；\texttt{uncertain} 事件介于二者之间，中位数为 $0.4167$，均值为 $0.4386$。Mann--Whitney U 检验显示，\texttt{good} 与 \texttt{bad} 的分布差异显著（$p<0.05$）；将 \texttt{bad} 与 \texttt{uncertain} 合并为 \texttt{non-good} 后，\texttt{good} 与 \texttt{non-good} 之间的差异同样显著（$p<0.05$）。由此可见，当前离群判别机制并非只依赖“偏离幅度大”的单一信号，而是能够结合文本证据深度，实现高价值异议与低质量偏离的有效分离。
 
-\input{tables/table_05.tex}
-
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{figures/fig3_outlier_separation.png}
@@ -271,6 +271,7 @@ $p>0.05$），表明方法间差异的效应量较小。因此，该结果不能
 我们认为可能的原因是，Full Method 的设计目标并非最大化平均分数或简单提高标签重合率，而是通过离群识别、模型画像和动态置信度机制生成更可审查的问题清单。从 Precision 和 Recall 的组合来看，Full Method 表现出明显的选择性输出倾向：其 Macro-Precision 为 $0.0901$，高于 Equal-Weight 的 $0.0771$ 和 Single-LLM Family Mean 的 $0.0769$；然而其 Macro-Recall 仅为 $0.1354$，显著低于 Equal-Weight 的 $0.4077$。结合平均预测问题量可以进一步解释这一现象：Full Method 平均每份文档仅输出 $15.9$ 个问题，而 Equal-Weight 平均输出 $144.8$ 个问题。因此，Full Method 并不是一个高召回的问题发现器，而是一个更精简、相对更高 Precision、更选择性的问题清单生成流程。
 
 \subsubsection{Model Profiling and Fixed Weighting (Ablation)}
+\input{tables/table_06_model_profile.tex}
 为了探究固定模型权重的实际效用，我们对模型画像进行了分析。5 个模型的平均固定权重分别为：DeepSeek（$0.3129$）、GPT（$0.2738$）、Kimi（$0.2732$）、Qwen（$0.2598$）和 GLM-5（$0.1437$）。值得注意的是，平均固定权重与单模型的平均 Macro-Recall / Macro-F1 均呈强负相关（分别为 $-0.8000$ 和 $-0.9000$）。这印证了本文的假设：固定权重不是模型综合分类能力的静态排序，而是对其在当前文档内捕捉“高价值离群”贡献的动态度量。同时，我们设定的 \texttt{full\_method\_equal\_weights} 消融实验（用等权重替换模型画像权重）进一步量化了该模块的贡献：Full Method（$0.0711$）与等权重版本（$0.0704$）的 Macro-F1 几乎一致（Wilcoxon 配对检验 $p=0.7500$），区别仅在于引入画像权重后最终预测问题数从 $17.6$ 进一步微降至 $15.9$。这提示我们，本文方法的主要可观察效果来自离群感知过滤、问题集合收敛与最终清单压缩的组合，而不是直接提升宏观分类指标。
 
 \subsubsection{Roundtable Convergence and Issue-list Compactness}
@@ -316,6 +317,7 @@ $p>0.05$），表明方法间差异的效应量较小。因此，该结果不能
 结论效度关注统计分析是否足以支撑研究推论。主要威胁在于文档间异质性带来的统计偏差，若直接将所有需求条目混合计算 $p$ 值，极易引发辛普森悖论。\textit{Mitigation:} 在统计设计上，我们严格采用“Document”作为配对比较的 Block 单元，使用鲁棒的非参数统计方法（Friedman 检验与配对 Wilcoxon 符号秩检验）并强制报告非参数效应量（Cliff's $\delta$），以规避分布异质性带来的误判。
 
 \subsection{Discussion}
+\input{tables/table_05.tex}
 综合上述结果与威胁分析，本文当前最重要的启示有三点。第一，在多 LLM 需求审查中，“少数派意见”不是应被直接抹平的噪声，而是应被进一步审查的潜在信息源；关键不在于是否偏离共识，而在于偏离是否具备高质量证据与可执行改写。第二，模型定权不应被理解为对模型能力的静态排序，而应被理解为一种文档内、任务内的证据驱动型信任分配机制。第三，圆桌共识的主要价值不是让模型的数值评分完全一致，而是帮助系统在有限轮次内稳定形成更紧凑、更可操作的问题集合。总体上，当前结果支持本文方法作为一种“从分歧到共识”的需求质量审查框架具有可行性，但仍需在更大规模对照实验中进一步验证。
 
 \section{Conclusion}
