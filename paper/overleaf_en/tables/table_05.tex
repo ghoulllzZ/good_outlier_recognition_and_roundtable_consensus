@@ -1,0 +1,27 @@
+\begin{table}[t]
+\centering
+\caption{Representative good and bad outlier cases.}
+\label{tab:representative_outlier_cases}
+\renewcommand{\arraystretch}{1.15}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{p{1.0cm}p{1.6cm}p{0.8cm}p{1.4cm}p{1.2cm}p{2.8cm}p{3.1cm}p{3.2cm}}
+\toprule
+\textbf{Case} & \textbf{Item} & \textbf{Type} & \textbf{Score / Median} & \textbf{Decision} & \textbf{Requirement excerpt} & \textbf{Model evidence} & \textbf{Adjudication rationale} \\
+\midrule
+G1 & \texttt{[doc--item]} & V & \texttt{[score]/[median]} & Good & \textit{``[short requirement excerpt]''} & \textit{``[evidence span]''} & Retained: the model identifies a concrete verifiability problem, gives a traceable textual cue, and proposes a testable or measurable revision. \\
+\midrule
+G2 & \texttt{[doc--item]} & A & \texttt{[score]/[median]} & Good & \textit{``[short requirement excerpt]''} & \textit{``[evidence span]''} & Retained: the minority judgment exposes an ambiguity missed by the group median, while the evidence and rewrite remain dimension-aligned and actionable. \\
+\midrule
+B1 & \texttt{[doc--item]} & U & \texttt{[score]/[median]} & Bad & \textit{``[short requirement excerpt]''} & \textit{``[evidence span]''} & Rejected: the explanation is weak or generic and does not clearly identify a textual defect, failing to justify the large deviation. \\
+\midrule
+B2 & \texttt{[doc--item]} & C & \texttt{[score]/[median]} & Bad & \textit{``[short requirement excerpt]''} & \textit{``[evidence span]''} & Rejected: reflects a dimension mismatch or an unsupported correctness claim rather than a demonstrable defect. \\
+\bottomrule
+\end{tabular}%
+}
+
+\vspace{0.4em}
+\begin{minipage}{0.97\textwidth}
+\footnotesize
+\textit{Note.} Good outliers are minority judgments that deviate from the group median but provide sufficient evidence, dimension-aligned reasoning, and executable rewrite suggestions. Bad outliers are deviations rejected by the argument-quality assessment or hard-fail rules (missing evidence, non-executable rewrites, or dimension mismatch). Bracketed placeholders should be replaced with real cases; complete cases are provided in the replication package.
+\end{minipage}
+\end{table}

@@ -1,0 +1,44 @@
+\begin{table}[t]
+\centering
+\caption{Treatments, baselines, and ablation settings.}
+\label{tab:treatments_baselines}
+\renewcommand{\arraystretch}{1.15}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{p{2.6cm}p{3.2cm}p{2.2cm}p{2.2cm}p{2.2cm}p{4.0cm}}
+\toprule
+\textbf{Treatment} &
+\textbf{Input and aggregation} &
+\textbf{Outlier-quality validation} &
+\textbf{Fixed model weights} &
+\textbf{Roundtable discussion} &
+\textbf{Purpose in evaluation} \\
+\midrule
+\textbf{Single-LLM} &
+Each LLM independently produces U/A/C/V scores, confidence, evidence, and rewrite suggestions per requirement; no cross-model aggregation. &
+No & No & No &
+Estimates the standalone capability of individual LLM reviewers; lower-bound reference for multi-LLM collaboration. \\
+\midrule
+\textbf{Equal-Weight Aggregation} &
+All LLMs share the same round-0 structured outputs; candidate issue scores are aggregated under equal model influence. &
+No & No; all models equal. & No &
+Tests whether simply combining LLMs improves issue-list generation without disagreement validation or interaction. \\
+\midrule
+\textbf{Roundtable No Weighting} &
+Same round-0 outputs and candidate issues; models take part in multi-round discussion. &
+No good/bad validation for weighting. & No; equal influence. & Yes; dynamic confidence updated across rounds. &
+Isolates the contribution of roundtable discussion while removing reliability-aware fixed weights. \\
+\midrule
+\textbf{Full Method} &
+Complete structured output (scores, confidence, evidence, rewrites). &
+Yes; argument-quality vector and hard-fail rules. & Yes; document-specific weights from good/bad-outlier evidence. & Yes; fixed weights combined with dynamic confidence. &
+Evaluates the complete outlier-aware consensus workflow (validation, profiling, roundtable extraction). \\
+\bottomrule
+\end{tabular}%
+}
+
+\vspace{0.4em}
+\begin{minipage}{0.97\textwidth}
+\footnotesize
+\textit{Note.} All treatments are evaluated on the same requirement documents and share the same initial round-0 LLM outputs whenever applicable. This paired design controls for stochastic variation in LLM generation and isolates the effects of equal aggregation, roundtable discussion, and reliability-aware fixed weighting.
+\end{minipage}
+\end{table}
