@@ -19,6 +19,7 @@
 \usepackage{array}
 \usepackage{float}
 \usepackage{rotating}
+\usepackage{placeins}
 
 \begin{document}
 
@@ -326,6 +327,7 @@ Conclusion validity concerns whether the statistical analysis supports the infer
 \input{tables/table_05.tex}
 Three insights stand out. First, in multi-LLM requirements review, ``minority opinions'' are not noise to be erased but a potential information source to be examined further; what matters is not whether a judgment deviates from consensus, but whether the deviation is backed by high-quality evidence and an executable rewrite. Second, model weighting should be understood not as a static ranking of ability but as a document-internal, task-internal, evidence-driven trust allocation. Third, the main value of roundtable consensus is not to make numeric scores identical but to help the system converge, within a few rounds, to a more compact and actionable issue set. Overall, the results support the feasibility of our ``from disagreement to consensus'' framework, while the validity threats indicate that it should be viewed as a promising method requiring further validation in larger controlled studies.
 
+\FloatBarrier
 \section{Conclusion}\label{sec:conclusion}
 The integration of multiple LLMs in software engineering has long been constrained by the majority-vote assumption of ``convergence implies correctness'', which tends to erase high-value minority opinions through group smoothing. Against this consensus fallacy, we build a heterogeneous multi-model roundtable-consensus framework for per-requirement quality assessment. By introducing an outlier-discrimination mechanism grounded in textual argumentation, the framework converts structured inter-model disagreement into global trust weights and, over multiple rounds, fuses these static weights with dynamic confidence to drive rational team consensus.
 
