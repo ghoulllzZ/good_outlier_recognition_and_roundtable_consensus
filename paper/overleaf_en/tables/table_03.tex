@@ -1,20 +1,21 @@
-\begin{sidewaystable}
+\begin{table}[!ht]
 \centering
 \caption{Treatment-level performance results.}
 \label{tab:treatment_results}
-\footnotesize
+\scriptsize
+\setlength{\tabcolsep}{4pt}
 \renewcommand{\arraystretch}{1.2}
-\begin{tabular}{p{3.2cm}cccp{2.2cm}p{4.6cm}p{3.0cm}}
+\begin{tabularx}{\textwidth}{p{2.4cm} c c c c X p{1.8cm}}
 \toprule
-\textbf{Treatment} & \textbf{Macro-P} & \textbf{Macro-R} & \textbf{Macro-F1} & \textbf{Avg.\ pred.\ issues} & \textbf{Primary characteristic} & \textbf{Role} \\
+\textbf{Treatment} & \textbf{Macro-P} & \textbf{Macro-R} & \textbf{Macro-F1} & \textbf{Avg.\ issues} & \textbf{Primary characteristic} & \textbf{Role} \\
 \midrule
 Single-LLM Family Mean & 0.0769 & --- & 0.0960 & --- & Balanced single-model behaviour & Reference \\
 Equal-Weight Aggregation & 0.0771 & 0.4077 & \textbf{0.1153} & 144.8 & Highest recall; very large list & Aggregation baseline \\
 Roundtable No Weighting & --- & --- & 0.0968 & 136.7 & Consensus without reliability weighting & Ablation \\
 Full Method & \textbf{0.0901} & 0.1354 & 0.0711 & \textbf{15.9} & Highest precision; strongest compression & Proposed \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 
 \par\vspace{0.4em}
-{\footnotesize \textit{Overall comparison.} A Friedman test on document-level Macro-F1 finds no statistically significant overall difference among the four treatments ($\chi^2=2.0400$, $p=0.5641$, Kendall's $W=0.0680$). Although the Full Method does not achieve the highest Macro-F1, it produces substantially more compact issue lists while improving precision, indicating a selective issue-generation strategy rather than a high-recall detector. \textit{Note.} Macro-P = Macro-Precision; Macro-R = Macro-Recall. Values are averaged over the 10 shared requirements documents. ``---'' denotes values not emphasized in the current study.\par}
-\end{sidewaystable}
+{\footnotesize \textit{Overall comparison.} A Friedman test on document-level Macro-F1 finds no statistically significant overall difference among the four treatments ($\chi^2=2.0400$, $p=0.5641$, Kendall's $W=0.0680$). Although the Full Method does not achieve the highest Macro-F1, it produces substantially more compact issue lists while improving precision, indicating a selective issue-generation strategy rather than a high-recall detector. \textit{Note.} Macro-P = Macro-Precision; Macro-R = Macro-Recall; Avg.\ issues = average predicted issues per document. Values are averaged over the 10 shared requirements documents. ``---'' denotes values not emphasized in the current study.\par}
+\end{table}
