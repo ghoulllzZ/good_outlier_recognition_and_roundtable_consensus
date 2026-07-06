@@ -4,17 +4,17 @@
 \label{tab:representative_outlier_cases}
 \renewcommand{\arraystretch}{1.15}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{p{1.0cm}p{1.6cm}p{0.8cm}p{1.4cm}p{1.2cm}p{2.8cm}p{3.1cm}p{3.2cm}}
+\begin{tabular}{p{1.0cm}p{1.9cm}p{0.8cm}p{1.3cm}p{1.1cm}p{3.0cm}p{3.4cm}p{3.2cm}}
 \toprule
 \textbf{Case} & \textbf{Item} & \textbf{Type} & \textbf{Score / Median} & \textbf{Decision} & \textbf{Requirement excerpt} & \textbf{Model evidence} & \textbf{Adjudication rationale} \\
 \midrule
-G1 & \texttt{[doc--item]} & V & \texttt{[score]/[median]} & Good & \textit{``[short requirement excerpt]''} & \textit{``[evidence span]''} & Retained: the model identifies a concrete verifiability problem, gives a traceable textual cue, and proposes a testable or measurable revision. \\
+G1 & \texttt{peppol--R49} & V & 1\,/\,3 & Good & \textit{``The VCD transportation system MUST provide a functionality that enables the economic operator to find an electronic address of a contracting authority \dots{}''} & \textit{``The clause uses the untestable pattern `provide a functionality that enables', with no input, output, pre/post-condition, or acceptance criterion; `find an electronic address' defines no source, format, timeliness, or failure handling.''} & Retained: identifies a concrete verifiability gap, cites a traceable textual cue, and proposes a testable, measurable rewrite. \\
 \midrule
-G2 & \texttt{[doc--item]} & A & \texttt{[score]/[median]} & Good & \textit{``[short requirement excerpt]''} & \textit{``[evidence span]''} & Retained: the minority judgment exposes an ambiguity missed by the group median, while the evidence and rewrite remain dimension-aligned and actionable. \\
+G2 & \texttt{tachonet--R36} & A & 3\,/\,1 & Good & \textit{``The system must be maintainable and extensible.''} & \textit{```maintainable' and `extensible' admit several interpretations (ease of code change vs.\ architectural flexibility), introducing ambiguity that leaves the requirement unclear.''} & Retained: the minority judgment exposes an ambiguity missed by the group median; the evidence and rewrite remain dimension-aligned and actionable. \\
 \midrule
-B1 & \texttt{[doc--item]} & U & \texttt{[score]/[median]} & Bad & \textit{``[short requirement excerpt]''} & \textit{``[evidence span]''} & Rejected: the explanation is weak or generic and does not clearly identify a textual defect, failing to justify the large deviation. \\
+B1 & \texttt{rlcs--R102} & U & 4\,/\,2 & Bad & \textit{``The hash value returned by the function shall will be at least 128 bits in length.''} & \textit{``The sentence is structurally simple and the key terms (`hash value', `128 bits') are easy to understand; only the double modal `shall will' causes a slight reading pause.''} & Rejected (hard-fail): the explanation is weak and generic and identifies no substantive understandability defect, so it cannot justify the large deviation. \\
 \midrule
-B2 & \texttt{[doc--item]} & C & \texttt{[score]/[median]} & Bad & \textit{``[short requirement excerpt]''} & \textit{``[evidence span]''} & Rejected: reflects a dimension mismatch or an unsupported correctness claim rather than a demonstrable defect. \\
+B2 & \texttt{tachonet--R1} & C & 5\,/\,3 & Bad & \textit{``A requirement is defined as `a condition or capability to which a system must conform'.''} & \textit{``The cited definition actually conforms to standard requirements-engineering practice (e.g.\ IEEE), so it is correct.''} & Rejected (hard-fail): an unsupported correctness claim against a statement that is in fact standard and correct, not a demonstrable defect. \\
 \bottomrule
 \end{tabular}%
 }
@@ -22,6 +22,6 @@ B2 & \texttt{[doc--item]} & C & \texttt{[score]/[median]} & Bad & \textit{``[sho
 \vspace{0.4em}
 \begin{minipage}{0.97\textwidth}
 \footnotesize
-\textit{Note.} Good outliers are minority judgments that deviate from the group median but provide sufficient evidence, dimension-aligned reasoning, and executable rewrite suggestions. Bad outliers are deviations rejected by the argument-quality assessment or hard-fail rules (missing evidence, non-executable rewrites, or dimension mismatch). Bracketed placeholders should be replaced with real cases; complete cases are provided in the replication package.
+\textit{Note.} Cases are drawn from the study outputs (document--item shown in the Item column) on the 10-document common scope. Good outliers are minority judgments that deviate from the group median but provide sufficient evidence, dimension-aligned reasoning, and executable rewrite suggestions; bad outliers are deviations rejected by the argument-quality assessment or hard-fail rules (missing evidence, non-executable rewrites, or dimension mismatch). Model-evidence text has been translated from the original review outputs and shortened for presentation; complete cases are provided in the replication package.
 \end{minipage}
 \end{table}
