@@ -4,21 +4,21 @@
 \label{tab:representative_outlier_cases}
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\renewcommand{\arraystretch}{1.2}
-\begin{tabularx}{\textwidth}{p{0.7cm} p{1.3cm} p{0.5cm} p{1.0cm} p{0.9cm} X X X}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\textwidth}{p{0.7cm} p{1.6cm} p{0.9cm} p{1.0cm} p{0.95cm} X X X}
 \toprule
-\textbf{Case} & \textbf{Item} & \textbf{Type} & \textbf{Score / Med.} & \textbf{Decision} & \textbf{Requirement excerpt} & \textbf{Model evidence} & \textbf{Adjudication rationale} \\
+\textbf{Case} & \textbf{Item} & \textbf{Type} & \textbf{Score/ Med.} & \textbf{Dec.} & \textbf{Requirement excerpt} & \textbf{Model evidence} & \textbf{Adjudication rationale} \\
 \midrule
-G1 & \texttt{peppol--R49} & V & 1\,/\,3 & Good & \textit{``The VCD transportation system MUST provide a functionality that enables the economic operator to find an electronic address of a contracting authority \dots{}''} & \textit{``The clause uses the untestable pattern `provide a functionality that enables', with no input, output, pre/post-condition, or acceptance criterion.''} & Retained: identifies a concrete verifiability gap, cites a traceable textual cue, and proposes a testable rewrite. \\
+G1 & peppol--R49 & V & 1\,/\,3 & Good & \textit{``The VCD transportation system MUST provide a functionality that enables the economic operator to find an electronic address of a contracting authority \dots{}''} & \textit{``The clause uses the untestable pattern `provide a functionality that enables', with no input, output, pre/post-condition, or acceptance criterion.''} & Retained: identifies a concrete verifiability gap, cites a traceable textual cue, and proposes a testable rewrite. \\
 \midrule
-G2 & \texttt{tachonet--R36} & A & 3\,/\,1 & Good & \textit{``The system must be maintainable and extensible.''} & \textit{```maintainable' and `extensible' admit several interpretations (ease of code change vs.\ architectural flexibility), introducing ambiguity.''} & Retained: the minority judgment exposes an ambiguity missed by the group median; evidence and rewrite are dimension-aligned. \\
+G2 & tachonet--R36 & A & 3\,/\,1 & Good & \textit{``The system must be maintainable and extensible.''} & \textit{```maintainable' and `extensible' admit several interpretations (ease of code change vs.\ architectural flexibility), introducing ambiguity.''} & Retained: the minority judgment exposes an ambiguity missed by the group median; evidence and rewrite are dimension-aligned. \\
 \midrule
-B1 & \texttt{rlcs--R102} & U & 4\,/\,2 & Bad & \textit{``The hash value returned by the function shall will be at least 128 bits in length.''} & \textit{``The sentence is structurally simple and the key terms are easy to understand; only the double modal `shall will' causes a slight reading pause.''} & Rejected (hard-fail): the explanation is weak and generic and identifies no substantive understandability defect. \\
+B1 & rlcs--R102 & U & 4\,/\,2 & Bad & \textit{``The hash value returned by the function shall will be at least 128 bits in length.''} & \textit{``The sentence is structurally simple and the key terms are easy to understand; only the double modal `shall will' causes a slight reading pause.''} & Rejected (hard-fail): the explanation is weak and generic and identifies no substantive understandability defect. \\
 \midrule
-B2 & \texttt{tachonet--R1} & C & 5\,/\,3 & Bad & \textit{``A requirement is defined as `a condition or capability to which a system must conform'.''} & \textit{``The cited definition actually conforms to standard requirements-engineering practice (e.g.\ IEEE), so it is correct.''} & Rejected (hard-fail): an unsupported correctness claim against a statement that is in fact standard and correct. \\
+B2 & tachonet--R1 & C & 5\,/\,3 & Bad & \textit{``A requirement is defined as `a condition or capability to which a system must conform'.''} & \textit{``The cited definition actually conforms to standard requirements-engineering practice (e.g.\ IEEE), so it is correct.''} & Rejected (hard-fail): an unsupported correctness claim against a statement that is in fact standard and correct. \\
 \bottomrule
 \end{tabularx}
 
 \par\vspace{0.4em}
-{\footnotesize \textit{Note.} Cases are drawn from the study outputs (document--item shown in the Item column) on the 10-document common scope. Good outliers deviate from the group median but provide sufficient evidence, dimension-aligned reasoning, and executable rewrites; bad outliers are deviations rejected by the argument-quality assessment or hard-fail rules. Model-evidence text has been translated from the original review outputs and shortened; complete cases are in the replication package.\par}
+{\footnotesize \textit{Note.} Cases are drawn from the study outputs (document--item shown in the Item column) on the 10-document common scope. Dec.\ = decision. Good outliers deviate from the group median but provide sufficient evidence, dimension-aligned reasoning, and executable rewrites; bad outliers are deviations rejected by the argument-quality assessment or hard-fail rules. Model-evidence text has been translated from the original review outputs and shortened; complete cases are in the replication package.\par}
 \end{table}
