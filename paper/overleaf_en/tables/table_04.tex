@@ -1,4 +1,4 @@
-\begin{table}[t]
+\begin{table}[!ht]
 \centering
 \caption{Model profiling and fixed weighting.}
 \label{tab:model_profile_weights}
@@ -15,9 +15,6 @@ GLM-5    & 0.1437 \\
 \bottomrule
 \end{tabular}
 
-\vspace{0.4em}
-\begin{minipage}{0.95\linewidth}
-\footnotesize
-\textit{Note.} Average document-level fixed weights derived from good-/bad-outlier evidence. The average fixed weight is strongly negatively correlated with each model's single-model Macro-Recall and Macro-F1 (Spearman $\rho=-0.80$ and $-0.90$, respectively), indicating that the weight reflects a model's contribution to capturing high-value outliers rather than its standalone classification ability. Ablation: replacing profiling weights with equal weights changes Macro-F1 only marginally (Full Method $0.0711$ vs.\ equal-weight variant $0.0704$; Wilcoxon paired test $p=0.7500$), while the average number of predicted issues decreases from $17.6$ to $15.9$.
-\end{minipage}
+\par\vspace{0.4em}
+{\footnotesize \textit{Note.} Average document-level fixed weights derived from good-/bad-outlier evidence. The average fixed weight is strongly negatively correlated with each model's single-model Macro-Recall and Macro-F1 (Spearman $\rho=-0.80$ and $-0.90$, respectively), indicating that the weight reflects a model's contribution to capturing high-value outliers rather than its standalone classification ability. Ablation: replacing profiling weights with equal weights changes Macro-F1 only marginally (Full Method $0.0711$ vs.\ equal-weight variant $0.0704$; Wilcoxon paired test $p=0.7500$), while the average number of predicted issues decreases from $17.6$ to $15.9$.\par}
 \end{table}

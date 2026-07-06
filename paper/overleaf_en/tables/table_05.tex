@@ -1,10 +1,10 @@
-\begin{table}[H]
+\begin{sidewaystable}
 \centering
 \caption{Representative good and bad outlier cases.}
 \label{tab:representative_outlier_cases}
-\renewcommand{\arraystretch}{1.15}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{p{1.0cm}p{1.9cm}p{0.8cm}p{1.3cm}p{1.1cm}p{3.0cm}p{3.4cm}p{3.2cm}}
+\footnotesize
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{p{0.9cm}p{2.0cm}p{0.8cm}p{1.4cm}p{1.1cm}p{4.2cm}p{4.6cm}p{4.4cm}}
 \toprule
 \textbf{Case} & \textbf{Item} & \textbf{Type} & \textbf{Score / Median} & \textbf{Decision} & \textbf{Requirement excerpt} & \textbf{Model evidence} & \textbf{Adjudication rationale} \\
 \midrule
@@ -16,12 +16,8 @@ B1 & \texttt{rlcs--R102} & U & 4\,/\,2 & Bad & \textit{``The hash value returned
 \midrule
 B2 & \texttt{tachonet--R1} & C & 5\,/\,3 & Bad & \textit{``A requirement is defined as `a condition or capability to which a system must conform'.''} & \textit{``The cited definition actually conforms to standard requirements-engineering practice (e.g.\ IEEE), so it is correct.''} & Rejected (hard-fail): an unsupported correctness claim against a statement that is in fact standard and correct, not a demonstrable defect. \\
 \bottomrule
-\end{tabular}%
-}
+\end{tabular}
 
-\vspace{0.4em}
-\begin{minipage}{0.97\textwidth}
-\footnotesize
-\textit{Note.} Cases are drawn from the study outputs (document--item shown in the Item column) on the 10-document common scope. Good outliers are minority judgments that deviate from the group median but provide sufficient evidence, dimension-aligned reasoning, and executable rewrite suggestions; bad outliers are deviations rejected by the argument-quality assessment or hard-fail rules (missing evidence, non-executable rewrites, or dimension mismatch). Model-evidence text has been translated from the original review outputs and shortened for presentation; complete cases are provided in the replication package.
-\end{minipage}
-\end{table}
+\par\vspace{0.4em}
+{\footnotesize \textit{Note.} Cases are drawn from the study outputs (document--item shown in the Item column) on the 10-document common scope. Good outliers deviate from the group median but provide sufficient evidence, dimension-aligned reasoning, and executable rewrites; bad outliers are deviations rejected by the argument-quality assessment or hard-fail rules (missing evidence, non-executable rewrites, or dimension mismatch). Model-evidence text has been translated from the original review outputs and shortened; complete cases are provided in the replication package.\par}
+\end{sidewaystable}

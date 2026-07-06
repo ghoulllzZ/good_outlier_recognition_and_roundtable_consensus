@@ -1,4 +1,4 @@
-\begin{table}[t]
+\begin{table}[!ht]
 \centering
 \caption{Dataset and ground-truth summary.}
 \label{tab:dataset_gt_summary}
@@ -22,9 +22,6 @@ Positive rate & 4.50\% & 13.80\% & 0.41\% & 5.83\% & 6.13\% \\
 \bottomrule
 \end{tabular}
 
-\vspace{0.4em}
-\begin{minipage}{0.95\linewidth}
-\footnotesize
-\textit{Note.} The evaluation unit is an $(item,type)$ pair, where $type \in \{U,A,C,V\}$ denotes Understandable, Unambiguous, Correctness, and Verifiable, respectively. Ground-truth labels are binary: $1$ indicates that the requirement item contains a quality issue in the corresponding dimension, and $0$ otherwise. The final ground truth was built from two independent expert annotations, with disagreements resolved by a third senior adjudicator.
-\end{minipage}
+\par\vspace{0.4em}
+{\footnotesize \textit{Note.} The evaluation unit is an $(item,type)$ pair, where $type \in \{U,A,C,V\}$ denotes Understandable, Unambiguous, Correctness, and Verifiable, respectively. Ground-truth labels are binary: $1$ indicates a quality issue in the corresponding dimension, $0$ otherwise. The final ground truth was built from two independent expert annotations, with disagreements resolved by a third senior adjudicator.\par}
 \end{table}

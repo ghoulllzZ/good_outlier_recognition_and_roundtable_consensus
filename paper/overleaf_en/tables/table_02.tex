@@ -1,10 +1,10 @@
-\begin{table}[t]
+\begin{sidewaystable}
 \centering
 \caption{Treatments, baselines, and ablation settings.}
 \label{tab:treatments_baselines}
-\renewcommand{\arraystretch}{1.15}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{p{2.6cm}p{3.2cm}p{2.2cm}p{2.2cm}p{2.2cm}p{4.0cm}}
+\footnotesize
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{p{2.6cm}p{4.2cm}p{2.6cm}p{2.6cm}p{2.6cm}p{4.6cm}}
 \toprule
 \textbf{Treatment} &
 \textbf{Input and aggregation} &
@@ -33,12 +33,8 @@ Complete structured output (scores, confidence, evidence, rewrites). &
 Yes; argument-quality vector and hard-fail rules. & Yes; document-specific weights from good/bad-outlier evidence. & Yes; fixed weights combined with dynamic confidence. &
 Evaluates the complete outlier-aware consensus workflow (validation, profiling, roundtable extraction). \\
 \bottomrule
-\end{tabular}%
-}
+\end{tabular}
 
-\vspace{0.4em}
-\begin{minipage}{0.97\textwidth}
-\footnotesize
-\textit{Note.} All treatments are evaluated on the same requirement documents and share the same initial round-0 LLM outputs whenever applicable. This paired design controls for stochastic variation in LLM generation and isolates the effects of equal aggregation, roundtable discussion, and reliability-aware fixed weighting.
-\end{minipage}
-\end{table}
+\par\vspace{0.4em}
+{\footnotesize \textit{Note.} All treatments are evaluated on the same requirement documents and share the same initial round-0 LLM outputs whenever applicable. This paired design controls for stochastic variation in LLM generation and isolates the effects of equal aggregation, roundtable discussion, and reliability-aware fixed weighting.\par}
+\end{sidewaystable}
