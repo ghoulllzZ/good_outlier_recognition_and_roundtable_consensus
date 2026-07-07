@@ -123,7 +123,7 @@ and compute the deviation and absolute deviation of each score:
 With an outlier sensitivity threshold $\theta=2$, a triple $(r,i,d)$ triggers an outlier event when $\mathrm{abs\_deviation}_{r,i,d}\ge\theta$. The output is a set of outlier events forming the candidate pool for argument-quality assessment. The goal here is not to treat deviating judgments as errors, but to build a ``needs-focused-review'' candidate set.
 
 \subsection{Stage 3: Argument-quality vector scoring}
-An outlier is not necessarily an error (``bad outlier''); it may be a model detecting a hidden defect with high-quality argumentation (``good outlier''). This stage quantifies the textual output of each outlier event via six features: evidence sufficiency ($E$), falsifiability/testability ($F$), rewrite executability ($R$), rationale specificity ($S$), dimension fit ($T$), and novelty ($D$). Each sub-item is scored on a discrete scale, and the normalized argument-quality score is:
+An outlier is not necessarily an error (``bad outlier''); it may be a model detecting a hidden defect with high-quality argumentation (``good outlier''). This stage quantifies the textual output of each outlier event via six features: evidence sufficiency ($E$), falsifiability/testability ($F$), rewrite executability ($R$), rationale specificity ($S$), dimension fit ($T$), and novelty ($D$). Each sub-item is scored on a discrete $0$--$2$ scale (so that each normalized term $q^{\bullet}/2 \in [0,1]$), and the normalized argument-quality score is:
 \begin{equation}
 Q_{r,i,d} = \frac{1}{6}\left(
 \frac{q^{E}_{r,i,d}}{2} + \frac{q^{F}_{r,i,d}}{2} + \frac{q^{R}_{r,i,d}}{2}
@@ -197,9 +197,9 @@ S_{issue}(i,d) = \sum_{r \in \mathcal{R}^{+}_{i,d}} \mathrm{influence}_{r,i,d}
 where $\mathcal{R}^{+}_{i,d}$ is the set of models supporting an issue on $(i,d)$. Each round ranks candidate issues by team score. Termination uses three criteria: score convergence, issue-set convergence (measured by set overlap), and a fixed round cap.
 
 \subsection{Stage 7: Final issue-list extraction}
-Finally, from the team scores, evidence spans, and rewrite suggestions after consensus, we apply a selection confidence threshold to extract the final high-quality issue set:
+Finally, from the team scores, evidence spans, and rewrite suggestions after consensus, we apply a selection threshold $\tau_{sel}$ (a team-score cutoff, distinct from the outlier sensitivity threshold $\theta$ of Stage~2) to extract the final high-quality issue set:
 \begin{equation}
-\mathit{final\_problems} = \left\{ (i,d) \;\middle|\; S_{issue}(i,d) \ge \theta \right\}
+\mathit{final\_problems} = \left\{ (i,d) \;\middle|\; S_{issue}(i,d) \ge \tau_{sel} \right\}
 \label{eq:final}
 \end{equation}
 Qualifying issues are ranked in descending order, and the Top-$K$ (e.g., 10) most influential defects form a highly structured team-level conclusion, standardized as: item id, issue type (U/A/C/V), evidence span, suggested rewrite, and supporters/influence.
@@ -238,7 +238,7 @@ To evaluate final issue-list quality we build ground truth (GT) by expert cross-
 To minimize internal-validity threats we apply strict reproducibility controls: (1) \textbf{Shared initial state}: all aggregation and roundtable baselines share the same batch of round-0 model outputs (initial scores, confidence, evidence), eliminating input inconsistency due to LLM API sampling randomness; (2) \textbf{Unified parameters}: all documents share fixed hyperparameters---outlier threshold $\theta=2$; good/bad thresholds $\tau_{good}=0.60$, $\tau_{bad}=0.30$; Bayesian smoothing $\kappa=3.0$, $\eta=4.0$; softmax penalty $\lambda=1.5$; maximum roundtable rounds $=2$; (3) \textbf{Robustness control}: an exponential-backoff retry mechanism is deployed; if a model repeatedly fails on a specific item, it is isolated (skipped) for that case while the others continue, testing robustness under ``missing review members''.
 
 \subsection{Data analysis methods}\label{sec:analysis}
-Statistical analysis is blocked by document to avoid Simpson's paradox from directly mixing heterogeneous items. We use $\alpha=0.05$ as the significance level and report non-parametric effect sizes alongside significance. For RQ1 (disagreement structure) we use a Friedman test on whether the frequency of strong outlier events differs across U/A/C/V; for RQ2 (discrimination) a Mann--Whitney U test compares good vs.\ bad outliers on $Q$ and sub-dimensions, with Cliff's $\delta$ effect sizes; for RQ3 (performance and ablation), since each document is evaluated under all four treatments, a global Friedman test compares Macro-F1 and, if significant, Holm--Bonferroni-corrected pairwise comparisons follow, together with Jaccard curves and score-fluctuation decay plots to visualize convergence.
+Statistical analysis is blocked by document to avoid Simpson's paradox from directly mixing heterogeneous items. We use $\alpha=0.05$ as the significance level and report non-parametric effect sizes alongside significance. For RQ1 (disagreement structure) we use a Kruskal--Wallis test on whether within-document outlier rates differ across U/A/C/V; for RQ2 (discrimination) a Mann--Whitney U test compares good vs.\ bad outliers on $Q$ and sub-dimensions, with Cliff's $\delta$ effect sizes; for RQ3 (performance and ablation), since each document is evaluated under all four treatments, a global Friedman test compares Macro-F1 and, if significant, Holm--Bonferroni-corrected pairwise comparisons follow, together with Jaccard curves and score-fluctuation decay plots to visualize convergence.
 
 \section{Results}\label{sec:results}
 All results are based on ground truth (GT), the current multi-model outputs, and document-level statistics. To keep the Full-Method diagnosis and treatment-level comparison over the same coverage, we use 10 shared requirements documents as a unified analysis scope.
